@@ -25,6 +25,7 @@ public interface ProcessorLifecycle {
     @ConnectorMethod(
         name = "test",
         description = "Runs a test on the processor to validate its configuration and functionality.",
+        allowedStates = {ComponentState.STOPPED, ComponentState.STOPPING, ComponentState.STARTING, ComponentState.RUNNING},
         arguments = {
             @MethodArgument(name = "name", type = String.class, description = "The name of the test to run."),
             @MethodArgument(name = "iterations", type = int.class, description = "The number of iterations to run the test.")

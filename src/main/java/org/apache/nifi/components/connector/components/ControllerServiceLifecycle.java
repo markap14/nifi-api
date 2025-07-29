@@ -12,6 +12,6 @@ public interface ControllerServiceLifecycle {
 
     Future<Void> enable();
 
-    void disable();
+    Future<Void> disable();
 
 }

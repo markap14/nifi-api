@@ -2,12 +2,8 @@
  *  Copyright (c) 2025 Snowflake Computing Inc. All rights reserved.
  */
 
-package org.apache.nifi.components.connector;
+package org.apache.nifi.components.connector.components;
 
-import org.apache.nifi.components.connector.components.ConnectionFacade;
-import org.apache.nifi.components.connector.components.ControllerServiceFacade;
-import org.apache.nifi.components.connector.components.ProcessorFacade;
-import org.apache.nifi.components.connector.components.StatelessGroupLifecycle;
 import org.apache.nifi.controller.queue.QueueSize;
 import org.apache.nifi.flow.VersionedProcessGroup;
 
@@ -33,15 +29,8 @@ public interface ProcessGroupFacade {
 
     Set<ProcessGroupFacade> getProcessGroups();
 
-    void enableControllerServices();
-
-    void disableControllerServices();
-
-    void startProcessors();
-
-    void stopProcessors();
-
     QueueSize getQueueSize();
 
     StatelessGroupLifecycle getStatelessLifecycle();
+
 }

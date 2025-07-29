@@ -18,6 +18,7 @@
 package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.ValidationResult;
+import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.flow.VersionedProcessGroup;
 
 import java.util.List;
@@ -25,30 +26,40 @@ import java.util.List;
 public interface Connector {
 
     /**
+     * Initializes the Connector instance, providing it the necessary context that it needs to operate.
+     * @param context the context for initialization
+     */
+    void initialize(ConnectorInitializationContext context);
+
+    /**
      * Stops the Connector instance.
-     * @param rootGroup the ProcessGroupFacade that represents the root group of the flow
      * @throws FlowUpdateException if there is an error stopping the Connector
      */
-    void stop(ProcessGroupFacade rootGroup) throws FlowUpdateException;
+    void stop() throws FlowUpdateException;
 
     /**
      * Starts the Connector instance.
-     * @param rootGroup the ProcessGroupFacade that represents the root group of the flow
      * @throws FlowUpdateException if there is an error starting the Connector
      */
-    void start(ProcessGroupFacade rootGroup) throws FlowUpdateException;
+    void start() throws FlowUpdateException;
 
     /**
-     * Validates that the Connector is valid according to its configuration. Validity of a Connector may be
+     * Drains all FlowFiles from the Connector instance. This is required in order to ensure that the
+     * flow definition is able to be safely updated from one version to another.
+     * @throws FlowUpdateException if there is an error draining the FlowFiles
+     */
+    void drainFlowFiles() throws FlowUpdateException;
+
+    /**
+     * Validates that the Connector is valid according to its current configuration. Validity of a Connector may be
      * defined simply as the all components being valid, or it may encompass more complex validation logic, such
      * as ensuring that a Source Processor is able to connect to a remote system, or that a Sink Processor
      * is able to write to a remote system.
      *
-     * @param rootGroup the ProcessGroupFacade that represents the root group of the flow
      * @return a list of ValidationResults, each of which may indicate a check that was performed and any associated explanations
      * as to why the Connector is valid or invalid.
      */
-    List<ValidationResult> validate(ProcessGroupFacade rootGroup);
+    List<ValidationResult> validate();
 
     /**
      * Provides the definition of the flow that can be used to create a new instance of the Connector.
@@ -58,11 +69,13 @@ public interface Connector {
     VersionedProcessGroup getFlowDefinition();
 
     /**
-     * Provides a new definition of the flow, based on the current definition of the flow.
-     * This provides the Connector with the ability to migrate the flow definition to a new version.
-     *
-     * @param flowDefinition the current definition of the flow
-     * @return the migrated flow definition
+     * Provides the FlowMigration instance that is responsible for migrating between different versions of the flow.
+     * @return the FlowMigration instance
      */
-    VersionedProcessGroup migrateFlowDefinition(VersionedProcessGroup flowDefinition);
+    FlowMigration getFlowMigration();
+
+    /**
+     * Provides the Assets that are necessary for the Connector to operate.
+     */
+    List<ConnectorAsset> getAssets();
 }

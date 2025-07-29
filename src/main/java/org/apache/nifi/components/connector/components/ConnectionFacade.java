@@ -11,6 +11,14 @@ public interface ConnectionFacade {
 
     VersionedConnection getDefinition();
 
+    /**
+     * Returns the size of the Connection's queue.
+     */
     QueueSize getQueueSize();
+
+    /**
+     * Purges all data from the connection.
+     */
+    void purge();
 
 }
