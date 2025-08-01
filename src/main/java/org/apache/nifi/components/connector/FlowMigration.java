@@ -4,8 +4,6 @@
 
 package org.apache.nifi.components.connector;
 
-import org.apache.nifi.flow.VersionedProcessGroup;
-
 public interface FlowMigration {
 
     /**
@@ -15,7 +13,7 @@ public interface FlowMigration {
      * @param flowDefinition the current definition of the flow
      * @return the migrated flow definition
      */
-    VersionedProcessGroup migrateFlowDefinition(VersionedProcessGroup flowDefinition);
+    ConnectorFlow migrateFlowDefinition(ConnectorFlow flowDefinition);
 
     /**
      * Performs any necessary actions before a flow is migrated to a new version of the flow.

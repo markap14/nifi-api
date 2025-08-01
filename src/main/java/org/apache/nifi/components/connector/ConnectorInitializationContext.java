@@ -4,7 +4,9 @@
 
 package org.apache.nifi.components.connector;
 
+import org.apache.nifi.components.connector.components.ParameterContextFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
+import org.apache.nifi.components.state.StateManager;
 
 public interface ConnectorInitializationContext {
 
@@ -13,5 +15,13 @@ public interface ConnectorInitializationContext {
     String getName();
 
     ProcessGroupFacade getRootGroup();
+
+    StateManager getStateManager();
+
+    SecretsManager getSecretsManager();
+
+    ConnectorConfigurationContext getConfigurationContext();
+
+    ParameterContextFacade getParameterContext();
 
 }

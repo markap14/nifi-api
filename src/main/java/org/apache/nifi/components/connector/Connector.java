@@ -18,10 +18,11 @@
 package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.ValidationResult;
-import org.apache.nifi.components.connector.components.ProcessGroupFacade;
-import org.apache.nifi.flow.VersionedProcessGroup;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 public interface Connector {
 
@@ -32,23 +33,23 @@ public interface Connector {
     void initialize(ConnectorInitializationContext context);
 
     /**
-     * Stops the Connector instance.
-     * @throws FlowUpdateException if there is an error stopping the Connector
-     */
-    void stop() throws FlowUpdateException;
-
-    /**
      * Starts the Connector instance.
      * @throws FlowUpdateException if there is an error starting the Connector
      */
-    void start() throws FlowUpdateException;
+    void start(Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException;
+
+    /**
+     * Stops the Connector instance.
+     * @throws FlowUpdateException if there is an error stopping the Connector
+     */
+    void stop(Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException;
 
     /**
      * Drains all FlowFiles from the Connector instance. This is required in order to ensure that the
      * flow definition is able to be safely updated from one version to another.
      * @throws FlowUpdateException if there is an error draining the FlowFiles
      */
-    void drainFlowFiles() throws FlowUpdateException;
+    void drainFlowFiles(Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException;
 
     /**
      * Validates that the Connector is valid according to its current configuration. Validity of a Connector may be
@@ -66,7 +67,7 @@ public interface Connector {
      *
      * @return the flow definition
      */
-    VersionedProcessGroup getFlowDefinition();
+    ConnectorFlow getFlowDefinition() throws IOException;
 
     /**
      * Provides the FlowMigration instance that is responsible for migrating between different versions of the flow.
@@ -75,7 +76,8 @@ public interface Connector {
     FlowMigration getFlowMigration();
 
     /**
-     * Provides the Assets that are necessary for the Connector to operate.
+     * Expose the Property Descriptors that are expected to be configurable through the Custom UI.
      */
-    List<ConnectorAsset> getAssets();
+    List<ConnectorPropertyGroup> getPropertyGroups();
+
 }

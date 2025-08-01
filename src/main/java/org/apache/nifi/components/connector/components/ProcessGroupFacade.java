@@ -33,4 +33,6 @@ public interface ProcessGroupFacade {
 
     StatelessGroupLifecycle getStatelessLifecycle();
 
+    ProcessGroupLifecycle getLifecycle();
+
 }

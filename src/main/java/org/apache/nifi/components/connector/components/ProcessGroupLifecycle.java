@@ -8,7 +8,7 @@ import java.util.concurrent.Future;
 
 public interface ProcessGroupLifecycle {
 
-    void enableControllerServices();
+    Future<Void> enableControllerServices();
 
     Future<Void> disableControllerServices();
 
