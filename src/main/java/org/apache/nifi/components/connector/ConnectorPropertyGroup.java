@@ -11,12 +11,12 @@ import java.util.List;
 public final class ConnectorPropertyGroup {
     private final String name;
     private final String description;
-    private final List<ConnectorPropertyDescriptor> propertyDescriptors;
+    private final List<ConnectorPropertySubGroup> subGroups;
 
     private ConnectorPropertyGroup(final Builder builder) {
         this.name = builder.name;
         this.description = builder.description;
-        this.propertyDescriptors = Collections.unmodifiableList(builder.propertyDescriptors);
+        this.subGroups = Collections.unmodifiableList(builder.subGroups);
     }
 
     public String getName() {
@@ -27,15 +27,15 @@ public final class ConnectorPropertyGroup {
         return description;
     }
 
-    public List<ConnectorPropertyDescriptor> getPropertyDescriptors() {
-        return propertyDescriptors;
+    public List<ConnectorPropertySubGroup> getSubGroups() {
+        return subGroups;
     }
 
 
     public static final class Builder {
         private String name;
         private String description;
-        private List<ConnectorPropertyDescriptor> propertyDescriptors = Collections.emptyList();
+        private List<ConnectorPropertySubGroup> subGroups = Collections.emptyList();
 
         public Builder name(String name) {
             this.name = name;
@@ -47,8 +47,8 @@ public final class ConnectorPropertyGroup {
             return this;
         }
 
-        public Builder propertyDescriptors(final List<ConnectorPropertyDescriptor> propertyDescriptors) {
-            this.propertyDescriptors = new ArrayList<>(propertyDescriptors);
+        public Builder subGroups(final List<ConnectorPropertySubGroup> subGroups) {
+            this.subGroups = new ArrayList<>(subGroups);
             return this;
         }
 

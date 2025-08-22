@@ -36,20 +36,20 @@ public interface Connector {
      * Starts the Connector instance.
      * @throws FlowUpdateException if there is an error starting the Connector
      */
-    void start(Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException;
+    void start(Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException;
 
     /**
      * Stops the Connector instance.
      * @throws FlowUpdateException if there is an error stopping the Connector
      */
-    void stop(Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException;
+    void stop(Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException;
 
     /**
      * Drains all FlowFiles from the Connector instance. This is required in order to ensure that the
      * flow definition is able to be safely updated from one version to another.
      * @throws FlowUpdateException if there is an error draining the FlowFiles
      */
-    void drainFlowFiles(Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException;
+    void drainFlowFiles(Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException;
 
     /**
      * Validates that the Connector is valid according to its current configuration. Validity of a Connector may be
@@ -78,6 +78,16 @@ public interface Connector {
     /**
      * Expose the Property Descriptors that are expected to be configurable through the Custom UI.
      */
-    List<ConnectorPropertyGroup> getPropertyGroups();
+    List<String> getPropertyGroupNames();
+
+    /**
+     * Returns the Property Group that corresponds to the given group name. The group name is expected to be in the list of names provided
+     * by {@link #getPropertyGroupNames()}.
+     *
+     * @param groupName the name of the group
+     * @return the Property Group with the given name
+     * @throws IllegalArgumentException if the group name does not exist
+     */
+    ConnectorPropertyGroup getPropertyGroup(String groupName);
 
 }

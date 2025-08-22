@@ -6,8 +6,8 @@ package org.apache.nifi.components.connector;
 
 public interface ConnectorConfigurationContext {
 
-    String getProperty(String propertyName);
+    String getProperty(String propertyGroupName, String propertyName);
 
-    String getProperty(ConnectorPropertyDescriptor propertyDescriptor);
+    String getProperty(ConnectorPropertyGroup propertyGroup, ConnectorPropertyDescriptor propertyDescriptor);
 
 }

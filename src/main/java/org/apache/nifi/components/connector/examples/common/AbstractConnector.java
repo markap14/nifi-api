@@ -7,6 +7,8 @@ package org.apache.nifi.components.connector.examples.common;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.Connector;
 import org.apache.nifi.components.connector.ConnectorInitializationContext;
+import org.apache.nifi.components.connector.ConnectorPropertyDescriptor;
+import org.apache.nifi.components.connector.ConnectorPropertyGroup;
 import org.apache.nifi.components.connector.FlowUpdateException;
 import org.apache.nifi.components.connector.components.ConnectionFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceFacade;
@@ -51,9 +53,9 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void start(final Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException {
+    public void start(final Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException {
         final ProcessGroupLifecycle lifecycle = getInitializationContext().getRootGroup().getLifecycle();
-        final long maxTime = System.currentTimeMillis() + duration.toMillis();
+        final long maxTime = System.currentTimeMillis() + timeout.toMillis();
 
         try {
             lifecycle.enableControllerServices().get(maxTime, TimeUnit.MILLISECONDS);
@@ -67,8 +69,8 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void stop(final Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException {
-        final long maxTime = System.currentTimeMillis() + duration.toMillis();
+    public void stop(final Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException {
+        final long maxTime = System.currentTimeMillis() + timeout.toMillis();
 
         final ProcessGroupLifecycle lifecycle = getInitializationContext().getRootGroup().getLifecycle();
         try {
@@ -90,10 +92,10 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void drainFlowFiles(final Duration duration) throws FlowUpdateException, TimeoutException, InterruptedException {
+    public void drainFlowFiles(final Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException {
         stopSourceProcessors();
 
-        final long maxTime = System.currentTimeMillis() + duration.toMillis();
+        final long maxTime = System.currentTimeMillis() + timeout.toMillis();
         while (!isGroupDrained(getInitializationContext().getRootGroup())) {
             if (System.currentTimeMillis() > maxTime) {
                 final QueueSize queueSize = getInitializationContext().getRootGroup().getQueueSize();
@@ -271,5 +273,13 @@ public abstract class AbstractConnector implements Connector {
         for (final ProcessGroupFacade childGroup : group.getProcessGroups()) {
             forEachConnection(childGroup, connectionConsumer);
         }
+    }
+
+    protected String getProperty(final String propertyGroupName, final String propertyName) {
+        return getInitializationContext().getConfigurationContext().getProperty(propertyGroupName, propertyName);
+    }
+
+    protected String getProperty(final ConnectorPropertyGroup propertyGroup, final ConnectorPropertyDescriptor propertyDescriptor) {
+        return getInitializationContext().getConfigurationContext().getProperty(propertyGroup, propertyDescriptor);
     }
 }

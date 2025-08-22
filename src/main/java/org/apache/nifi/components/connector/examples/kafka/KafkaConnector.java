@@ -8,100 +8,38 @@ import org.apache.nifi.components.connector.ConnectorFlow;
 import org.apache.nifi.components.connector.ConnectorParameterContext;
 import org.apache.nifi.components.connector.ConnectorPropertyGroup;
 import org.apache.nifi.components.connector.FlowMigration;
-import org.apache.nifi.components.connector.ConnectorPropertyDescriptor;
 import org.apache.nifi.components.connector.examples.common.AbstractConnector;
+import org.apache.nifi.components.connector.examples.kafka.KafkaConnectivityProperties.SecurityProtocol;
 import org.apache.nifi.flow.VersionedConnection;
 import org.apache.nifi.flow.VersionedProcessGroup;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class KafkaConnector extends AbstractConnector {
-
-    static final String PLAINTEXT = "PLAINTEXT";
-    static final String SSL = "SSL";
-    static final String SASL_SSL = "SASL_SSL";
-
-    static final ConnectorPropertyDescriptor BOOTSTRAP_SERVERS = new ConnectorPropertyDescriptor.Builder()
-        .name("Bootstrap Servers")
-        .description("The Kafka bootstrap servers to connect to")
-        .defaultValue("localhost:9092")
-        .required(true)
-        .build();
-
-    static final ConnectorPropertyDescriptor TOPIC = new ConnectorPropertyDescriptor.Builder()
-        .name("Topic")
-        .description("The Kafka topic to produce or consume messages from")
-        .required(true)
-        .build();
-
-    static final ConnectorPropertyDescriptor SECURITY_PROTOCOL = new ConnectorPropertyDescriptor.Builder()
-        .name("Security Protocol")
-        .description("The security protocol to use for connecting to Kafka")
-        .allowableValues(PLAINTEXT, SSL, SASL_SSL)
-        .defaultValue(PLAINTEXT)
-        .required(true)
-        .build();
-
-    static List<ConnectorPropertyDescriptor> kafkaProperties = List.of(
-        BOOTSTRAP_SERVERS,
-        TOPIC,
-        SECURITY_PROTOCOL
-    );
-
-    static final ConnectorPropertyGroup kafkaPropertyGroup = new ConnectorPropertyGroup.Builder()
-        .name("Kafka Configuration")
-        .description("Properties for connecting to Kafka")
-        .propertyDescriptors(kafkaProperties)
-        .build();
-
-
-    static final ConnectorPropertyDescriptor DATABASE = new ConnectorPropertyDescriptor.Builder()
-        .name("Database")
-        .description("The Snowflake database to connect to")
-        .required(true)
-        .build();
-    static final ConnectorPropertyDescriptor SCHEMA = new ConnectorPropertyDescriptor.Builder()
-        .name("Schema")
-        .description("The Snowflake schema to use")
-        .required(true)
-        .build();
-    static final ConnectorPropertyDescriptor WAREHOUSE = new ConnectorPropertyDescriptor.Builder()
-        .name("Warehouse")
-        .description("The Snowflake warehouse to use for processing")
-        .required(true)
-        .build();
-
-    static List<ConnectorPropertyDescriptor> snowflakeProperties = List.of(
-        DATABASE,
-        SCHEMA,
-        WAREHOUSE
-    );
-
-    static final ConnectorPropertyGroup snowflakePropertyGroup = new ConnectorPropertyGroup.Builder()
-        .name("Snowflake Configuration")
-        .description("Properties for connecting to Snowflake")
-        .propertyDescriptors(snowflakeProperties)
-        .build();
-
+    private static final Map<String, ConnectorPropertyGroup> propertyGroups = new LinkedHashMap<>();
+    static {
+        propertyGroups.put(KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP.getName(), KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP);
+        propertyGroups.put(SourceDataProperties.SOURCE_DATA_GROUP.getName(), SourceDataProperties.SOURCE_DATA_GROUP);
+        propertyGroups.put(SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP.getName(), SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP);
+    }
 
 
     @Override
     public ConnectorFlow getFlowDefinition() throws IOException {
-        final String securityProtocol = getInitializationContext().getConfigurationContext().getProperty(SECURITY_PROTOCOL);
-        final String sourceGroupResourceName = switch (securityProtocol) {
-            case PLAINTEXT -> "kafka-plaintext.json";
-            case SSL -> "kafka-ssl.json";
-            case SASL_SSL -> "kafka-sasl.json";
-            default -> throw new IllegalArgumentException("Unsupported security protocol: " + securityProtocol);
-        };
+        final String securityProtocol = getInitializationContext().getConfigurationContext().getProperty(
+            KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP, KafkaConnectivityProperties.SECURITY_PROTOCOL);
+        final String sourceGroupResourceName = getSourceGroupResourceName(securityProtocol);
 
         final VersionedProcessGroup sourceGroupFlow = readFlowDefinition(sourceGroupResourceName);
         final VersionedProcessGroup destinationFlow = readFlowDefinition("snowflake-destination.json");
-        final VersionedConnection connection = createConnection(sourceGroupFlow, "Output",
-            destinationFlow, "Input");
+        final VersionedConnection connection = createConnection(sourceGroupFlow, "Output", destinationFlow, "Input");
 
         final VersionedProcessGroup rootGroup = new VersionedProcessGroup();
         rootGroup.setName("Kafka Connector Flow");
@@ -125,6 +63,18 @@ public class KafkaConnector extends AbstractConnector {
         return flow;
     }
 
+    private static String getSourceGroupResourceName(final String securityProtocol) {
+        if (securityProtocol.equals(SecurityProtocol.PLAINTEXT.name())) {
+            return "kafka-plaintext.json";
+        } else if (securityProtocol.equals(SecurityProtocol.SSL.name())) {
+            return "kafka-ssl.json";
+        } else if (securityProtocol.equals(SecurityProtocol.SASL_SSL.name())) {
+            return "kafka-sasl.json";
+        }
+
+        throw new IllegalArgumentException("Unsupported security protocol: " + securityProtocol);
+    }
+
 
     private VersionedProcessGroup readFlowDefinition(final String resourceName) throws IOException {
         try (final InputStream in = getClass().getClassLoader().getResourceAsStream(resourceName)) {
@@ -139,11 +89,23 @@ public class KafkaConnector extends AbstractConnector {
     }
 
     @Override
-    public List<ConnectorPropertyGroup> getPropertyGroups() {
-        return List.of(
-            kafkaPropertyGroup,
-            snowflakePropertyGroup
-        );
+    public List<String> getPropertyGroupNames() {
+        final List<String> groupNames = new ArrayList<>();
+        groupNames.add(KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP.getName());
+        groupNames.add(SourceDataProperties.SOURCE_DATA_GROUP.getName());
+
+        final String dataFormat = getProperty(SourceDataProperties.SOURCE_DATA_GROUP, SourceDataProperties.DATA_FORMAT);
+        if ("AVRO".equalsIgnoreCase(dataFormat)) {
+            groupNames.add(SchemaRegistryProperties.SCHEMA_REGISTRY_GROUP.getName());
+        }
+
+        groupNames.add(SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP.getName());
+        return groupNames;
     }
 
+    @Override
+    public ConnectorPropertyGroup getPropertyGroup(final String groupName) {
+        return Optional.ofNullable(propertyGroups.get(groupName))
+            .orElseThrow(() -> new IllegalArgumentException("Unknown group name: " + groupName));
+    }
 }
