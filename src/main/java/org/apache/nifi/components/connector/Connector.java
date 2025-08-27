@@ -19,11 +19,27 @@ package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.ValidationResult;
 
-import java.io.IOException;
-import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.TimeoutException;
 
+/**
+ * <p>
+ *     A Connector is a component that encapsulates and manages a NiFi flow, in such a way that the flow
+ *     can be treated as a single component. The Connector is responsible for managing the lifecycle of the flow,
+ *     including starting and stopping the flow, as well as validating that the flow is correctly configured.
+ *     The Connector exposes a single holistic configuration that is encapsulates the configuration of the
+ *     sources, sinks, transformations, routing logic, and any other components that make up the flow.
+ * </p>
+ *
+ * <p>
+ *     Importantly, a Connector represents a higher-level abstraction and is capable of manipulating the associated
+ *     dataflow, including adding, removing, and configuring components within the flow. This allows a single entity to
+ *     be provided such that configuring properties can result in a flow being dynamically reconfigured (e.g., using a
+ *     different Controller Service implementation).
+ * </p>
+ *
+ * <b>Implementation Note:</b> This API is currently experimental, as it is under very active development. As such,
+ * it is subject to change without notice between minor releases.
+ */
 public interface Connector {
 
     /**
@@ -36,20 +52,13 @@ public interface Connector {
      * Starts the Connector instance.
      * @throws FlowUpdateException if there is an error starting the Connector
      */
-    void start(Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException;
+    void start() throws FlowUpdateException;
 
     /**
      * Stops the Connector instance.
      * @throws FlowUpdateException if there is an error stopping the Connector
      */
-    void stop(Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException;
-
-    /**
-     * Drains all FlowFiles from the Connector instance. This is required in order to ensure that the
-     * flow definition is able to be safely updated from one version to another.
-     * @throws FlowUpdateException if there is an error draining the FlowFiles
-     */
-    void drainFlowFiles(Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException;
+    void stop() throws FlowUpdateException;
 
     /**
      * Validates that the Connector is valid according to its current configuration. Validity of a Connector may be
@@ -61,19 +70,6 @@ public interface Connector {
      * as to why the Connector is valid or invalid.
      */
     List<ValidationResult> validate();
-
-    /**
-     * Provides the definition of the flow that can be used to create a new instance of the Connector.
-     *
-     * @return the flow definition
-     */
-    ConnectorFlow getFlowDefinition() throws IOException;
-
-    /**
-     * Provides the FlowMigration instance that is responsible for migrating between different versions of the flow.
-     * @return the FlowMigration instance
-     */
-    FlowMigration getFlowMigration();
 
     /**
      * Expose the Property Descriptors that are expected to be configurable through the Custom UI.
@@ -89,5 +85,13 @@ public interface Connector {
      * @throws IllegalArgumentException if the group name does not exist
      */
     ConnectorPropertyGroup getPropertyGroup(String groupName);
+
+    /**
+     * The `onConfigured` method is called after the Connector has been (re)configured and is responsible for
+     * performing any necessary actions to ensure that the flow is configured according to the Connector's configuration.
+     *
+     * @throws FlowUpdateException if the Connector fails to update the flow according to its configuration
+     */
+    void onConfigured() throws FlowUpdateException;
 
 }

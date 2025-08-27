@@ -18,7 +18,7 @@ public class SourceDataProperties {
         .name("Topics")
         .description("The Kafka Topics to consume from")
         .required(true)
-        .type(PropertyType.LIST)
+        .type(PropertyType.STRING_LIST)
         .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
         .build();
 

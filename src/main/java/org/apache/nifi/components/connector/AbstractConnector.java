@@ -2,27 +2,21 @@
  *  Copyright (c) 2025 Snowflake Computing Inc. All rights reserved.
  */
 
-package org.apache.nifi.components.connector.examples.common;
+package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.ValidationResult;
-import org.apache.nifi.components.connector.Connector;
-import org.apache.nifi.components.connector.ConnectorInitializationContext;
-import org.apache.nifi.components.connector.ConnectorPropertyDescriptor;
-import org.apache.nifi.components.connector.ConnectorPropertyGroup;
-import org.apache.nifi.components.connector.FlowUpdateException;
 import org.apache.nifi.components.connector.components.ConnectionFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupLifecycle;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
-import org.apache.nifi.controller.queue.QueueSize;
 import org.apache.nifi.flow.ConnectableComponent;
 import org.apache.nifi.flow.ConnectableComponentType;
 import org.apache.nifi.flow.VersionedComponent;
 import org.apache.nifi.flow.VersionedConnection;
 import org.apache.nifi.flow.VersionedProcessGroup;
+import org.apache.nifi.logging.ComponentLog;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -31,17 +25,33 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 public abstract class AbstractConnector implements Connector {
     private volatile ConnectorInitializationContext initializationContext;
+    private volatile ComponentLog logger;
 
     @Override
-    public void initialize(final ConnectorInitializationContext context) {
+    public final void initialize(final ConnectorInitializationContext context) {
         this.initializationContext = context;
+        this.logger = context.getLogger();
+
+        try {
+            init();
+        } catch (final FlowUpdateException e) {
+            throw new RuntimeException("Failed to initialize Connector", e);
+        }
+    }
+
+    /**
+     * No-op method for subclasses to override to perform any initialization logic
+     */
+    protected void init() throws FlowUpdateException {
+    }
+
+    protected final ComponentLog getLogger() {
+        return logger;
     }
 
     protected final ConnectorInitializationContext getInitializationContext() {
@@ -53,14 +63,11 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void start(final Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException {
+    public void start() throws FlowUpdateException {
         final ProcessGroupLifecycle lifecycle = getInitializationContext().getRootGroup().getLifecycle();
-        final long maxTime = System.currentTimeMillis() + timeout.toMillis();
 
         try {
-            lifecycle.enableControllerServices().get(maxTime, TimeUnit.MILLISECONDS);
-        } catch (final TimeoutException | InterruptedException e) {
-            throw e;
+            lifecycle.enableControllerServices().get();
         } catch (final Exception e) {
             throw new FlowUpdateException("Failed to enable Controller Services", e);
         }
@@ -69,48 +76,60 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void stop(final Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException {
-        final long maxTime = System.currentTimeMillis() + timeout.toMillis();
-
+    public void stop() throws FlowUpdateException {
         final ProcessGroupLifecycle lifecycle = getInitializationContext().getRootGroup().getLifecycle();
         try {
-            lifecycle.stopProcessors().get(maxTime, TimeUnit.MILLISECONDS);
-        } catch (final InterruptedException | TimeoutException e) {
-            throw e;
+            lifecycle.stopProcessors().get();
         } catch (final Exception e) {
             throw new FlowUpdateException("Failed to stop all Processors", e);
         }
 
         try {
-            final long remainingMillis = maxTime - System.currentTimeMillis();
-            lifecycle.disableControllerServices().get(remainingMillis, TimeUnit.MILLISECONDS);
-        } catch (final InterruptedException | TimeoutException e) {
-            throw e;
+            lifecycle.disableControllerServices().get();
         } catch (final Exception e) {
             throw new RuntimeException("Failed to disable Controller Services", e);
         }
     }
 
-    @Override
-    public void drainFlowFiles(final Duration timeout) throws FlowUpdateException, TimeoutException, InterruptedException {
-        stopSourceProcessors();
 
-        final long maxTime = System.currentTimeMillis() + timeout.toMillis();
-        while (!isGroupDrained(getInitializationContext().getRootGroup())) {
-            if (System.currentTimeMillis() > maxTime) {
-                final QueueSize queueSize = getInitializationContext().getRootGroup().getQueueSize();
-                if (queueSize.getObjectCount() == 0) {
-                    return;
-                }
-
-                throw new TimeoutException("Timed out waiting for all FlowFiles to drain with [%s] FlowFiles ([%s] bytes) remaining in the queue".formatted(
-                        queueSize.getObjectCount(), queueSize.getByteCount()));
-            }
-
-            ensureDrainage();
-
-            Thread.sleep(1000);
+    /**
+     * Drains all FlowFiles from the Connector instance.
+     *
+     * @throws FlowUpdateException if there is an error draining the FlowFiles
+     */
+    protected void drainFlowFiles() throws FlowUpdateException {
+        try {
+            stopSourceProcessors();
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new FlowUpdateException(e);
         }
+
+        try {
+            ensureDrainageUnblocked();
+        } catch (final InvocationFailedException e) {
+            throw new FlowUpdateException(e);
+        }
+
+        while (!isGroupDrained(getInitializationContext().getRootGroup())) {
+            try {
+                Thread.sleep(1000);
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new FlowUpdateException(e);
+            }
+        }
+    }
+
+    /**
+     * <p>
+     *     A method designed to be overridden by subclasses that need to ensure that any
+     *     blockages to FlowFile drainage are removed. The default implementation is a no-op.
+     *     Typical use cases include notifying Processors that block until a certain amount of data is queued up,
+     *     or until certain conditions are met, that they should immediately allow data to flow through.
+     * </p>
+     */
+    protected void ensureDrainageUnblocked() throws InvocationFailedException {
     }
 
     @Override
@@ -119,48 +138,6 @@ public abstract class AbstractConnector implements Connector {
         validate(getInitializationContext().getRootGroup(), validationResults);
         return validationResults;
     }
-
-    protected VersionedConnection createConnection(final VersionedProcessGroup sourceGroup, final String outputPortName,
-                final VersionedProcessGroup destinationGroup, final String inputPortName) {
-
-        // Create the Source ConnectableComponent
-        final String sourcePortId = sourceGroup.getOutputPorts().stream()
-            .filter(port -> port.getName().equals(outputPortName))
-            .findFirst()
-            .map(VersionedComponent::getIdentifier)
-            .orElseThrow(() -> new IllegalArgumentException("Output port '%s' not found in source group '%s'".formatted(outputPortName, sourceGroup.getIdentifier())));
-
-        final ConnectableComponent connectableSource = new ConnectableComponent();
-        connectableSource.setId(sourcePortId);
-        connectableSource.setGroupId(sourceGroup.getIdentifier());
-        connectableSource.setName(outputPortName);
-        connectableSource.setType(ConnectableComponentType.OUTPUT_PORT);
-
-        // Create the Destination ConnectableComponent
-        final String destinationPortId = destinationGroup.getInputPorts().stream()
-            .filter(port -> port.getName().equals(inputPortName))
-            .findFirst()
-            .map(VersionedComponent::getIdentifier)
-            .orElseThrow(() -> new IllegalArgumentException("Input port '%s' not found in destination group '%s'".formatted(inputPortName, destinationGroup.getIdentifier())));
-
-        final ConnectableComponent connectableDestination = new ConnectableComponent();
-        connectableDestination.setId(destinationPortId);
-        connectableDestination.setGroupId(destinationGroup.getIdentifier());
-        connectableDestination.setName(inputPortName);
-        connectableDestination.setType(ConnectableComponentType.INPUT_PORT);
-
-        // Create the VersionedConnection
-        final VersionedConnection connection = new VersionedConnection();
-        connection.setSource(connectableSource);
-        connection.setDestination(connectableDestination);
-        connection.setIdentifier(sourceGroup.getIdentifier() + "-" + outputPortName + "-" + destinationGroup.getIdentifier() + "-" + inputPortName);
-        connection.setBackPressureDataSizeThreshold("1 GB");
-        connection.setBackPressureObjectThreshold(10000L);
-        connection.setSelectedRelationships(Set.of(""));
-
-        return connection;
-    }
-
 
     private void validate(final ProcessGroupFacade group, final List<ValidationResult> validationResults) {
         for (final ProcessorFacade processor : group.getProcessors()) {
@@ -203,11 +180,52 @@ public abstract class AbstractConnector implements Connector {
     }
 
     /**
-     * Ensure that if there are any components that are blocking the flow from draining,
-     * such as those that wait for some threshold to be reached before processing,
-     * that those components are triggered to perform their tasks pre-emptively.
+     * Creates a VersionedConnection between two Process Groups using the specified port names.
+     * @param sourceGroup the source Process Group
+     * @param outputPortName the name of the output port in the source group
+     * @param destinationGroup the destination Process Group
+     * @param inputPortName the name of the input port in the destination group
+     * @return the created VersionedConnection
      */
-    protected void ensureDrainage() {
+    protected VersionedConnection createConnection(final VersionedProcessGroup sourceGroup, final String outputPortName,
+        final VersionedProcessGroup destinationGroup, final String inputPortName) {
+
+        // Create the Source ConnectableComponent
+        final String sourcePortId = sourceGroup.getOutputPorts().stream()
+            .filter(port -> port.getName().equals(outputPortName))
+            .findFirst()
+            .map(VersionedComponent::getIdentifier)
+            .orElseThrow(() -> new IllegalArgumentException("Output port '%s' not found in source group '%s'".formatted(outputPortName, sourceGroup.getIdentifier())));
+
+        final ConnectableComponent connectableSource = new ConnectableComponent();
+        connectableSource.setId(sourcePortId);
+        connectableSource.setGroupId(sourceGroup.getIdentifier());
+        connectableSource.setName(outputPortName);
+        connectableSource.setType(ConnectableComponentType.OUTPUT_PORT);
+
+        // Create the Destination ConnectableComponent
+        final String destinationPortId = destinationGroup.getInputPorts().stream()
+            .filter(port -> port.getName().equals(inputPortName))
+            .findFirst()
+            .map(VersionedComponent::getIdentifier)
+            .orElseThrow(() -> new IllegalArgumentException("Input port '%s' not found in destination group '%s'".formatted(inputPortName, destinationGroup.getIdentifier())));
+
+        final ConnectableComponent connectableDestination = new ConnectableComponent();
+        connectableDestination.setId(destinationPortId);
+        connectableDestination.setGroupId(destinationGroup.getIdentifier());
+        connectableDestination.setName(inputPortName);
+        connectableDestination.setType(ConnectableComponentType.INPUT_PORT);
+
+        // Create the VersionedConnection
+        final VersionedConnection connection = new VersionedConnection();
+        connection.setSource(connectableSource);
+        connection.setDestination(connectableDestination);
+        connection.setIdentifier(sourceGroup.getIdentifier() + "-" + outputPortName + "-" + destinationGroup.getIdentifier() + "-" + inputPortName);
+        connection.setBackPressureDataSizeThreshold("1 GB");
+        connection.setBackPressureObjectThreshold(10000L);
+        connection.setSelectedRelationships(Set.of(""));
+
+        return connection;
     }
 
     protected boolean isGroupDrained(final ProcessGroupFacade group) {
@@ -217,19 +235,35 @@ public abstract class AbstractConnector implements Connector {
     protected void stopSourceProcessors() throws InterruptedException, FlowUpdateException {
         final List<ProcessorFacade> sourceProcessors = getSourceProcessors();
 
-        final List<Future<Void>> stopFutures = new ArrayList<>();
+        final List<CompletableFuture<Void>> stopFutures = new ArrayList<>();
         for (final ProcessorFacade sourceProcessor : sourceProcessors) {
-            stopFutures.add(sourceProcessor.getLifecycle().stop());
+            final Future<Void> stopFuture = sourceProcessor.getLifecycle().stop();
+            stopFutures.add(toCompletableFuture(stopFuture));
         }
 
         final CompletableFuture<Void> allStopped = CompletableFuture.allOf(stopFutures.toArray(new CompletableFuture[0]));
         try {
-            allStopped.get(5, TimeUnit.MINUTES);
+            allStopped.get();
         } catch (final InterruptedException ie) {
             throw ie;
         } catch (final Exception e) {
             throw new FlowUpdateException("Failed to stop all Source Processors", e);
         }
+    }
+
+    private <T> CompletableFuture<T> toCompletableFuture(final Future<T> future) {
+        if (future instanceof CompletableFuture) {
+            return (CompletableFuture<T>) future;
+        }
+
+        // Wrap a non-CompletableFuture in a CompletableFuture
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return future.get();
+            } catch (final Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     protected List<ProcessorFacade> getSourceProcessors() {

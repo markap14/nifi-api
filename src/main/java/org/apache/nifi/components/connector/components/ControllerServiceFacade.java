@@ -5,6 +5,7 @@
 package org.apache.nifi.components.connector.components;
 
 import org.apache.nifi.components.ValidationResult;
+import org.apache.nifi.components.connector.InvocationFailedException;
 import org.apache.nifi.flow.VersionedControllerService;
 
 import java.util.List;
@@ -18,6 +19,6 @@ public interface ControllerServiceFacade {
 
     List<ValidationResult> validate(Map<String, String> propertyValues);
 
-    Object invokeConnectorMethod(String methodName, Map<String, Object> arguments);
+    Object invokeConnectorMethod(String methodName, Map<String, Object> arguments) throws InvocationFailedException;
 
 }

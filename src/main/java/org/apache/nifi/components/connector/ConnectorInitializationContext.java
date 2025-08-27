@@ -7,21 +7,108 @@ package org.apache.nifi.components.connector;
 import org.apache.nifi.components.connector.components.ParameterContextFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.state.StateManager;
+import org.apache.nifi.flow.Bundle;
+import org.apache.nifi.flow.VersionedProcessGroup;
+import org.apache.nifi.logging.ComponentLog;
 
+import java.util.concurrent.Callable;
+
+/**
+ * <p>
+ *     The ConnectorInitializationContext provides context about how the connector is being run.
+ *     This includes the identifier and name of Connector as well as access to the crucial components that
+ *     it may need to interact with in order to perform its tasks.
+ * </p>
+ */
 public interface ConnectorInitializationContext {
 
+    /**
+     * Returns the identifier of the Connector.
+     * @return the identifier of the Connector
+     */
     String getIdentifier();
 
+    /**
+     * Returns the name of the Connector.
+     * @return the name of the Connector
+     */
     String getName();
 
+    /**
+     * Returns the ComponentLog that can be used for logging. Use of the ComponentLog is preferred
+     * over directly constructing a Logger because it integrates with NiFi's logging system to create bulletins
+     * as well as delegating to the underlying logging framework.
+     *
+     * @return the ComponentLog for logging
+     */
+    ComponentLog getLogger();
+
+    /**
+     * Returns the ProcessGroupFacade representing the root process group of the Connector.
+     * @return the root ProcessGroupFacade
+     */
     ProcessGroupFacade getRootGroup();
 
-    StateManager getStateManager();
-
+    /**
+     * Returns the SecretsManager that can be used for retrieving Secrets from an external secrets provider.
+     * @return the SecretsManager
+     */
     SecretsManager getSecretsManager();
 
+    /**
+     * Returns the ConnectorConfigurationContext that can be used for retrieving configured property values.
+     * @return the ConnectorConfigurationContext
+     */
     ConnectorConfigurationContext getConfigurationContext();
 
+    /**
+     * Returns the ParameterContextFacade that allows reading and management of Parameter values and assets.
+     * @return the ParameterContextFacade
+     */
     ParameterContextFacade getParameterContext();
+
+    /**
+     * <p>
+     *   Updates the Connector's flow to the given VersionedProcessGroup. This may be a long-running process, as it involves
+     *   several steps, to include:
+     *   <ul>
+     *     <li>Identifying which elements in the flow have changed</li>
+     *     <li>Stopping affected Processors and Controller Services, waiting for them to stop fully</li>
+     *     <li>Applying necessary changes, to include changing component configuration, adding, and removing components</li>
+     *     <li>Restarting all components</li>
+     *   </ul>
+     * </p>
+     *
+     * <p>
+     *     Depending on the changes required in order to update the flow to the provided VersionedProcessGroup, this
+     *     could also result in stopping source processors and waiting for queues to drain.
+     * </p>
+     *
+     * <p>
+     *   This method will block until the update is complete. Note that this could result in the associated flow becoming
+     *   invalid if not properly configured. Otherwise, if the Connector is running, any newly added components will also
+     *   be started.
+     * </p>
+     *
+     * @param updatedRootGroup the new representation of the root process group for the Connector
+     * @param flowDrain a FlowDrain that is capable of draining all data in the flow, if necessary, in order to perform the update reliably.
+     */
+    void updateFlow(VersionedProcessGroup updatedRootGroup, FlowDrain flowDrain);
+
+    /**
+     * The Bundle that the Connector was configured with. If this is not the current Bundle, it implies that the Connector
+     * has changed to a different Bundle than was used when the Connector was previously configured,
+     * and the flow may need to be updated to match the new version.
+     * @return the Bundle that the Connector was configured with
+     */
+    Bundle getConfiguredBundle();
+
+    /**
+     * The Bundle that describes the current version of the Connector. If this is different from the Bundle returned by
+     * {@link #getConfiguredBundle()}, it implies that the Connector has been migrated to a different version and its flow
+     * may need to be updated.
+     * @return the current Bundle of this Connector
+     */
+    Bundle getBundle();
 
 }

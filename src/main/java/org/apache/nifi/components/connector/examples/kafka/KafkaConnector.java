@@ -4,11 +4,11 @@
 
 package org.apache.nifi.components.connector.examples.kafka;
 
-import org.apache.nifi.components.connector.ConnectorFlow;
-import org.apache.nifi.components.connector.ConnectorParameterContext;
+import org.apache.nifi.components.connector.AbstractConnector;
 import org.apache.nifi.components.connector.ConnectorPropertyGroup;
-import org.apache.nifi.components.connector.FlowMigration;
-import org.apache.nifi.components.connector.examples.common.AbstractConnector;
+import org.apache.nifi.components.connector.FlowUpdateException;
+import org.apache.nifi.components.connector.InvocationFailedException;
+import org.apache.nifi.components.connector.components.ProcessorFacade;
 import org.apache.nifi.components.connector.examples.kafka.KafkaConnectivityProperties.SecurityProtocol;
 import org.apache.nifi.flow.VersionedConnection;
 import org.apache.nifi.flow.VersionedProcessGroup;
@@ -22,6 +22,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * An example of a Connector that reads from Kafka and writes to Snowflake. This Connector
+ * is not expected to be provided as part of the API, but rather as an example of how
+ * a Connector can be implemented, in order to both demonstrate the concepts and validate
+ * the API itself.
+ */
 public class KafkaConnector extends AbstractConnector {
     private static final Map<String, ConnectorPropertyGroup> propertyGroups = new LinkedHashMap<>();
     static {
@@ -30,62 +36,9 @@ public class KafkaConnector extends AbstractConnector {
         propertyGroups.put(SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP.getName(), SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP);
     }
 
-
     @Override
-    public ConnectorFlow getFlowDefinition() throws IOException {
-        final String securityProtocol = getInitializationContext().getConfigurationContext().getProperty(
-            KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP, KafkaConnectivityProperties.SECURITY_PROTOCOL);
-        final String sourceGroupResourceName = getSourceGroupResourceName(securityProtocol);
-
-        final VersionedProcessGroup sourceGroupFlow = readFlowDefinition(sourceGroupResourceName);
-        final VersionedProcessGroup destinationFlow = readFlowDefinition("snowflake-destination.json");
-        final VersionedConnection connection = createConnection(sourceGroupFlow, "Output", destinationFlow, "Input");
-
-        final VersionedProcessGroup rootGroup = new VersionedProcessGroup();
-        rootGroup.setName("Kafka Connector Flow");
-        rootGroup.setIdentifier("Kafka Root Group");
-        rootGroup.setProcessGroups(Set.of(sourceGroupFlow, destinationFlow));
-        connection.setGroupIdentifier(rootGroup.getIdentifier());
-        rootGroup.setConnections(Set.of(connection));
-
-        final ConnectorFlow flow = new ConnectorFlow() {
-            @Override
-            public VersionedProcessGroup getRootGroup() {
-                return rootGroup;
-            }
-
-            @Override
-            public ConnectorParameterContext getParameterContext() {
-                return null;
-            }
-        };
-
-        return flow;
-    }
-
-    private static String getSourceGroupResourceName(final String securityProtocol) {
-        if (securityProtocol.equals(SecurityProtocol.PLAINTEXT.name())) {
-            return "kafka-plaintext.json";
-        } else if (securityProtocol.equals(SecurityProtocol.SSL.name())) {
-            return "kafka-ssl.json";
-        } else if (securityProtocol.equals(SecurityProtocol.SASL_SSL.name())) {
-            return "kafka-sasl.json";
-        }
-
-        throw new IllegalArgumentException("Unsupported security protocol: " + securityProtocol);
-    }
-
-
-    private VersionedProcessGroup readFlowDefinition(final String resourceName) throws IOException {
-        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(resourceName)) {
-            return null;
-            //return OBJECT_MAPPER.readValue(in, VersionedProcessGroup.class);
-        }
-    }
-
-    @Override
-    public FlowMigration getFlowMigration() {
-        return null;
+    protected void init() throws FlowUpdateException {
+        onConfigured();
     }
 
     @Override
@@ -108,4 +61,69 @@ public class KafkaConnector extends AbstractConnector {
         return Optional.ofNullable(propertyGroups.get(groupName))
             .orElseThrow(() -> new IllegalArgumentException("Unknown group name: " + groupName));
     }
+
+    @Override
+    public void onConfigured() throws FlowUpdateException {
+        try {
+            final VersionedProcessGroup rootGroup = buildFlowDefinition();
+            getInitializationContext().updateFlow(rootGroup, this::drainFlowFiles);
+        } catch (final IOException e) {
+            throw new FlowUpdateException(e);
+        }
+    }
+
+    @Override
+    protected void ensureDrainageUnblocked() throws InvocationFailedException {
+        final List<ProcessorFacade> mergeProcessors = getInitializationContext().getRootGroup().getProcessors().stream()
+            .filter(this::isDrainageBlock)
+            .toList();
+
+        for (final ProcessorFacade mergeProcessor : mergeProcessors) {
+            mergeProcessor.invokeConnectorMethod("ignoreThresholds", Map.of());
+        }
+    }
+
+    private boolean isDrainageBlock(final ProcessorFacade processor) {
+        return processor.getDefinition().getType().contains("Merge");
+    }
+
+    private VersionedProcessGroup buildFlowDefinition() throws IOException {
+        final String securityProtocol = getInitializationContext().getConfigurationContext().getProperty(
+            KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP, KafkaConnectivityProperties.SECURITY_PROTOCOL);
+        final String sourceGroupResourceName = getSourceGroupResourceName(securityProtocol);
+
+        final VersionedProcessGroup sourceGroupFlow = readFlowDefinition(sourceGroupResourceName);
+        final VersionedProcessGroup destinationFlow = readFlowDefinition("snowflake-destination.json");
+        final VersionedConnection connection = createConnection(sourceGroupFlow, "Output", destinationFlow, "Input");
+
+        final VersionedProcessGroup rootGroup = new VersionedProcessGroup();
+        rootGroup.setName("Kafka Connector Flow");
+        rootGroup.setIdentifier("Kafka Root Group");
+        rootGroup.setProcessGroups(Set.of(sourceGroupFlow, destinationFlow));
+        connection.setGroupIdentifier(rootGroup.getIdentifier());
+        rootGroup.setConnections(Set.of(connection));
+
+        return rootGroup;
+    }
+
+    private static String getSourceGroupResourceName(final String securityProtocol) {
+        if (securityProtocol.equals(SecurityProtocol.PLAINTEXT.name())) {
+            return "kafka-plaintext.json";
+        } else if (securityProtocol.equals(SecurityProtocol.SSL.name())) {
+            return "kafka-ssl.json";
+        } else if (securityProtocol.equals(SecurityProtocol.SASL_SSL.name())) {
+            return "kafka-sasl.json";
+        }
+
+        throw new IllegalArgumentException("Unsupported security protocol: " + securityProtocol);
+    }
+
+
+    private VersionedProcessGroup readFlowDefinition(final String resourceName) throws IOException {
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(resourceName)) {
+            return null;
+            //return OBJECT_MAPPER.readValue(in, VersionedProcessGroup.class);
+        }
+    }
+
 }

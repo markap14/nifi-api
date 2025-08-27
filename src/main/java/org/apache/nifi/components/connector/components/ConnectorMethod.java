@@ -12,8 +12,44 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
+ * <p>
  * Annotation that can be added to a method in a Processor or ControllerService in order
- * to expose the method to connectors for invocation.
+ * to expose the method to connectors for invocation. The method must be public and
+ * not static. The method may return a value. However, the value that is returned will
+ * be converted into a JSON object and that JSON object will be returned to the caller.
+ * </p>
+ *
+ * <p>
+ * The following example shows a method that is exposed to connectors:
+ * </p>
+ *
+ <pre>
+ * {@code
+ * @ConnectorMethod(
+ *     name = "echo",
+ *     description = "Returns the provided text after concatenating it the specified number of times.",
+ *     allowedStates = {ComponentState.STOPPED, ComponentState.STOPPING, ComponentState.STARTING, ComponentState.RUNNING},
+ *     arguments = {
+ *         @MethodArgument(name = "text", type = String.class, description = "The text to echo", required = true),
+ *         @MethodArgument(name = "iterations", type = int.class, description = "The number of iterations to echo the text", required = false)
+ *     }
+ * )
+ * public String echo(Map<String, Object> arguments) {
+ *     final StringBuilder sb = new StringBuilder();
+ *     final String text = (String) arguments.get("text");
+ *     final int iterations = (int) arguments.getOrDefault("iterations", 2);
+ *     for (int i = 0; i < iterations; i++) {
+ *       sb.append(text);
+ *
+ *       if (i < (iterations - 1)) {
+ *         sb.append("\n");
+ *       }
+ *     }
+ *
+ *     return sb.toString();
+ * }
+ * }
+ * </pre>
  */
 @Documented
 @Target({ElementType.METHOD})

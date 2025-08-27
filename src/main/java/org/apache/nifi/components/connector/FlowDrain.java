@@ -4,12 +4,8 @@
 
 package org.apache.nifi.components.connector;
 
-public enum PropertyType {
-    STRING,
-    INTEGER,
-    BOOLEAN,
-    FLOAT,
-    DOUBLE,
-    STRING_LIST,
-    PASSWORD
+public interface FlowDrain {
+
+    void drainFlowFiles() throws FlowUpdateException;
+
 }
