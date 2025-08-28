@@ -1,17 +1,27 @@
 /*
- *  Copyright (c) 2025 Snowflake Computing Inc. All rights reserved.
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.connector.components.ParameterContextFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
-import org.apache.nifi.components.state.StateManager;
 import org.apache.nifi.flow.Bundle;
 import org.apache.nifi.flow.VersionedProcessGroup;
 import org.apache.nifi.logging.ComponentLog;
-
-import java.util.concurrent.Callable;
 
 /**
  * <p>
@@ -71,13 +81,14 @@ public interface ConnectorInitializationContext {
      * <p>
      *   Updates the Connector's flow to the given VersionedProcessGroup. This may be a long-running process, as it involves
      *   several steps, to include:
-     *   <ul>
-     *     <li>Identifying which elements in the flow have changed</li>
-     *     <li>Stopping affected Processors and Controller Services, waiting for them to stop fully</li>
-     *     <li>Applying necessary changes, to include changing component configuration, adding, and removing components</li>
-     *     <li>Restarting all components</li>
-     *   </ul>
      * </p>
+     * <ul>
+     *   <li>Identifying which elements in the flow have changed</li>
+     *   <li>Stopping affected Processors and Controller Services, waiting for them to stop fully</li>
+     *   <li>Applying necessary changes, to include changing component configuration, adding, and removing components</li>
+     *   <li>Restarting all components</li>
+     * </ul>
+     *
      *
      * <p>
      *     Depending on the changes required in order to update the flow to the provided VersionedProcessGroup, this

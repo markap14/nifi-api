@@ -73,6 +73,7 @@ public interface Connector {
 
     /**
      * Expose the Property Descriptors that are expected to be configurable through the Custom UI.
+     * @return a list of names for all property groups that are exposed by this Connector
      */
     List<String> getPropertyGroupNames();
 
