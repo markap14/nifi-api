@@ -17,6 +17,7 @@
 
 package org.apache.nifi.components.connector.examples.kafka;
 
+import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.AbstractConnector;
 import org.apache.nifi.components.connector.ConnectorPropertyGroup;
 import org.apache.nifi.components.connector.FlowUpdateException;
@@ -84,6 +85,16 @@ public class KafkaConnector extends AbstractConnector {
         } catch (final IOException e) {
             throw new FlowUpdateException(e);
         }
+    }
+
+    @Override
+    public void onPropertyGroupConfigured(final String groupName) {
+
+    }
+
+    @Override
+    public List<ValidationResult> validatePropertyGroup(final String groupName, final Map<String, String> propertyValues) {
+        return List.of();
     }
 
     @Override

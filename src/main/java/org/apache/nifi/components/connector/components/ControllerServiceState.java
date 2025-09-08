@@ -20,7 +20,10 @@ package org.apache.nifi.components.connector.components;
 public enum ControllerServiceState {
     DISABLED,
 
-    ENABLING,
+    DISABLING,
 
-    ENABLED;
+    ENABLED,
+
+    ENABLING;
+
 }

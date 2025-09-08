@@ -20,6 +20,7 @@ package org.apache.nifi.components.connector;
 import org.apache.nifi.components.ValidationResult;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * <p>
@@ -95,4 +96,7 @@ public interface Connector {
      */
     void onConfigured() throws FlowUpdateException;
 
+    void onPropertyGroupConfigured(String groupName);
+
+    List<ValidationResult> validatePropertyGroup(String groupName, Map<String, String> propertyValues);
 }

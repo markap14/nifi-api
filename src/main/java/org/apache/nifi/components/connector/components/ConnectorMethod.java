@@ -84,7 +84,7 @@ public @interface ConnectorMethod {
     /**
      * The states in which the component that defines the method is allowed to be in
      * when the method is invoked. If the Processor or ControllerService is not in one of these states,
-     * any attempt to invoke the method will result in an error. The default states include all but DISABLED.
+     * any attempt to invoke the method will result in an error. The default states include all but PROCESSOR_DISABLED.
      *
      * @return the states in which the component that defines the method is allowed to be in when the method is invoked
      */
