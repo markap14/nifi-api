@@ -17,7 +17,7 @@
 
 package org.apache.nifi.components.connector.components;
 
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 public interface ProcessorLifecycle {
 
@@ -27,9 +27,9 @@ public interface ProcessorLifecycle {
 
     void terminate();
 
-    Future<Void> stop();
+    CompletableFuture<Void> stop();
 
-    Future<Void> start();
+    CompletableFuture<Void> start();
 
     void disable();
 

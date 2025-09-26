@@ -20,6 +20,7 @@ package org.apache.nifi.components.connector;
 import org.apache.nifi.components.connector.components.ParameterContextFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.flow.Bundle;
+import org.apache.nifi.flow.VersionedExternalFlow;
 import org.apache.nifi.flow.VersionedProcessGroup;
 import org.apache.nifi.logging.ComponentLog;
 
@@ -104,7 +105,9 @@ public interface ConnectorInitializationContext {
      * @param updatedRootGroup the new representation of the root process group for the Connector
      * @param flowDrain a FlowDrain that is capable of draining all data in the flow, if necessary, in order to perform the update reliably.
      */
-    void updateFlow(VersionedProcessGroup updatedRootGroup, FlowDrain flowDrain);
+    void updateFlow(VersionedProcessGroup updatedRootGroup, FlowDrain flowDrain) throws FlowUpdateException;
+
+    void updateFlow(VersionedExternalFlow versionedExternalFlow, FlowDrain flowDrain) throws FlowUpdateException;
 
     /**
      * The Bundle that the Connector was configured with. If this is not the current Bundle, it implies that the Connector

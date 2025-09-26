@@ -17,14 +17,14 @@
 
 package org.apache.nifi.components.connector.components;
 
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 public interface ControllerServiceLifecycle {
 
     ControllerServiceState getState();
 
-    Future<Void> enable();
+    CompletableFuture<Void> enable();
 
-    Future<Void> disable();
+    CompletableFuture<Void> disable();
 
 }

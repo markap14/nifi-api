@@ -17,18 +17,24 @@
 
 package org.apache.nifi.components.connector.components;
 
+import org.apache.nifi.asset.Asset;
+
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collection;
+import java.util.Set;
 
 public interface ParameterContextFacade {
 
     /**
-     * Sets the value of a parameter in the Parameter Context.
-     * @param parameterName the name of the parameter to set
-     * @param value the value to set for the parameter
-     * @return the previous value of the parameter, or null if it was not set before
+     * Updates the parameters in the Parameter Context with the given collection of ParameterValue objects.
+     * If a parameter does not already exist, it will be created. If it does exist, its value will be updated.
+     * If any parameter already exists but is not included in the given collection, it will remain unchanged.
+     *
+     * @param parameterValues the collection of ParameterValue objects to set or update in the Parameter Context
+     * @throws IllegalArgumentException if the sensitivity of a parameter does not match the existing parameter's sensitivity
      */
-    String setValue(String parameterName, String value);
+    void updateParameters(Collection<ParameterValue> parameterValues);
 
     /**
      * Gets the value of a parameter from the Parameter Context.
@@ -38,10 +44,25 @@ public interface ParameterContextFacade {
     String getValue(String parameterName);
 
     /**
-     * Creates an asset whose contents are provided by the given InputStream.
-     * @param parameterName the name of the parameter to assign the asset to
+     * Returns the names of all parameters that have been set in the Parameter Context.
+     * @return the names of all parameters that have been set in the Parameter Context.
+     */
+    Set<String> getDefinedParameterNames();
+
+    /**
+     * Checks if a parameter is marked as sensitive in the Parameter Context.
+     * @param parameterName the name of the parameter to check
+     * @return true if the parameter is marked as sensitive, false if it is not sensitive or is not known
+     */
+    boolean isSensitive(String parameterName);
+
+    /**
+     * Creates an asset whose contents are provided by the given InputStream. The asset may then be associated with a parameter
+     * by creating a ParameterValue that references the asset and updating parameters via updateParameters(Collection).
+     *
      * @param inputStream the InputStream containing the asset contents
      * @throws IOException if an error occurs while reading from the InputStream or storing the asset
+     * @return the asset that was created
      */
-    void createAsset(String parameterName, InputStream inputStream) throws IOException;
+    Asset createAsset(InputStream inputStream) throws IOException;
 }

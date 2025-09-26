@@ -17,16 +17,16 @@
 
 package org.apache.nifi.components.connector.components;
 
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 public interface ProcessGroupLifecycle {
 
-    Future<Void> enableControllerServices();
+    CompletableFuture<Void> enableControllerServices();
 
-    Future<Void> disableControllerServices();
+    CompletableFuture<Void> disableControllerServices();
 
-    void startProcessors();
+    CompletableFuture<Void> startProcessors();
 
-    Future<Void> stopProcessors();
+    CompletableFuture<Void> stopProcessors();
 
 }
