@@ -19,11 +19,14 @@ package org.apache.nifi.components.connector.examples.kafka;
 
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.AbstractConnector;
-import org.apache.nifi.components.connector.ConnectorPropertyGroup;
+import org.apache.nifi.components.connector.ConfigurationStep;
 import org.apache.nifi.components.connector.FlowUpdateException;
 import org.apache.nifi.components.connector.InvocationFailedException;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
 import org.apache.nifi.components.connector.examples.kafka.KafkaConnectivityProperties.SecurityProtocol;
+import org.apache.nifi.flow.ConnectableComponent;
+import org.apache.nifi.flow.ConnectableComponentType;
+import org.apache.nifi.flow.VersionedComponent;
 import org.apache.nifi.flow.VersionedConnection;
 import org.apache.nifi.flow.VersionedProcessGroup;
 
@@ -34,7 +37,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -44,56 +46,57 @@ import java.util.Set;
  * the API itself.
  */
 public class KafkaConnector extends AbstractConnector {
-    private static final Map<String, ConnectorPropertyGroup> propertyGroups = new LinkedHashMap<>();
+    private static final Map<String, ConfigurationStep> configurationSteps = new LinkedHashMap<>();
     static {
-        propertyGroups.put(KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP.getName(), KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP);
-        propertyGroups.put(SourceDataProperties.SOURCE_DATA_GROUP.getName(), SourceDataProperties.SOURCE_DATA_GROUP);
-        propertyGroups.put(SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP.getName(), SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP);
+        configurationSteps.put(KafkaConnectivityProperties.KAFKA_CONNECTION_STEP.getName(), KafkaConnectivityProperties.KAFKA_CONNECTION_STEP);
+        configurationSteps.put(SourceDataProperties.SOURCE_DATA_STEP.getName(), SourceDataProperties.SOURCE_DATA_STEP);
+        configurationSteps.put(SnowflakeProperties.SNOWFLAKE_STEP.getName(), SnowflakeProperties.SNOWFLAKE_STEP);
     }
 
     @Override
     protected void init() throws FlowUpdateException {
-        onConfigured();
+        finishUpdate();
     }
 
     @Override
-    public List<String> getPropertyGroupNames() {
-        final List<String> groupNames = new ArrayList<>();
-        groupNames.add(KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP.getName());
-        groupNames.add(SourceDataProperties.SOURCE_DATA_GROUP.getName());
+    public List<ConfigurationStep> getConfigurationSteps() {
+        final List<ConfigurationStep> steps = new ArrayList<>();
+        steps.add(KafkaConnectivityProperties.KAFKA_CONNECTION_STEP);
+        steps.add(SourceDataProperties.SOURCE_DATA_STEP);
 
-        final String dataFormat = getProperty(SourceDataProperties.SOURCE_DATA_GROUP, SourceDataProperties.DATA_FORMAT);
+        final String dataFormat = getProperty(SourceDataProperties.SOURCE_DATA_STEP, SourceDataProperties.DATA_FORMAT);
         if ("AVRO".equalsIgnoreCase(dataFormat)) {
-            groupNames.add(SchemaRegistryProperties.SCHEMA_REGISTRY_GROUP.getName());
+            steps.add(SchemaRegistryProperties.SCHEMA_REGISTRY_STEP);
         }
 
-        groupNames.add(SnowflakeProperties.SNOWFLAKE_PROPERTY_GROUP.getName());
-        return groupNames;
+        steps.add(SnowflakeProperties.SNOWFLAKE_STEP);
+        return steps;
     }
 
     @Override
-    public ConnectorPropertyGroup getPropertyGroup(final String groupName) {
-        return Optional.ofNullable(propertyGroups.get(groupName))
-            .orElseThrow(() -> new IllegalArgumentException("Unknown group name: " + groupName));
-    }
-
-    @Override
-    public void onConfigured() throws FlowUpdateException {
+    public void finishUpdate() throws FlowUpdateException {
         try {
             final VersionedProcessGroup rootGroup = buildFlowDefinition();
-            getInitializationContext().updateFlow(rootGroup, this::drainFlowFiles);
+            getInitializationContext().updateFlow(rootGroup);
         } catch (final IOException e) {
             throw new FlowUpdateException(e);
         }
     }
 
     @Override
-    public void onPropertyGroupConfigured(final String groupName) {
-
+    public void onConfigurationStepConfigured(final String stepName) {
     }
 
     @Override
-    public List<ValidationResult> validatePropertyGroup(final String groupName, final Map<String, String> propertyValues) {
+    public void prepareUpdate() {
+    }
+
+    @Override
+    public void abortUpdatePreparation(final Throwable cause) {
+    }
+
+    @Override
+    public List<ValidationResult> validateConfigurationStep(final String stepName, final Map<String, String> propertyValues) {
         return List.of();
     }
 
@@ -114,7 +117,7 @@ public class KafkaConnector extends AbstractConnector {
 
     private VersionedProcessGroup buildFlowDefinition() throws IOException {
         final String securityProtocol = getInitializationContext().getConfigurationContext().getProperty(
-            KafkaConnectivityProperties.KAFKA_CONNECTION_PROPERTY_GROUP, KafkaConnectivityProperties.SECURITY_PROTOCOL);
+            KafkaConnectivityProperties.KAFKA_CONNECTION_STEP, KafkaConnectivityProperties.SECURITY_PROTOCOL);
         final String sourceGroupResourceName = getSourceGroupResourceName(securityProtocol);
 
         final VersionedProcessGroup sourceGroupFlow = readFlowDefinition(sourceGroupResourceName);
@@ -129,6 +132,55 @@ public class KafkaConnector extends AbstractConnector {
         rootGroup.setConnections(Set.of(connection));
 
         return rootGroup;
+    }
+
+    /**
+     * Creates a VersionedConnection between two Process Groups using the specified port names.
+     * @param sourceGroup the source Process Group
+     * @param outputPortName the name of the output port in the source group
+     * @param destinationGroup the destination Process Group
+     * @param inputPortName the name of the input port in the destination group
+     * @return the created VersionedConnection
+     */
+    protected VersionedConnection createConnection(final VersionedProcessGroup sourceGroup, final String outputPortName,
+        final VersionedProcessGroup destinationGroup, final String inputPortName) {
+
+        // Create the Source ConnectableComponent
+        final String sourcePortId = sourceGroup.getOutputPorts().stream()
+            .filter(port -> port.getName().equals(outputPortName))
+            .findFirst()
+            .map(VersionedComponent::getIdentifier)
+            .orElseThrow(() -> new IllegalArgumentException("Output port '%s' not found in source group '%s'".formatted(outputPortName, sourceGroup.getIdentifier())));
+
+        final ConnectableComponent connectableSource = new ConnectableComponent();
+        connectableSource.setId(sourcePortId);
+        connectableSource.setGroupId(sourceGroup.getIdentifier());
+        connectableSource.setName(outputPortName);
+        connectableSource.setType(ConnectableComponentType.OUTPUT_PORT);
+
+        // Create the Destination ConnectableComponent
+        final String destinationPortId = destinationGroup.getInputPorts().stream()
+            .filter(port -> port.getName().equals(inputPortName))
+            .findFirst()
+            .map(VersionedComponent::getIdentifier)
+            .orElseThrow(() -> new IllegalArgumentException("Input port '%s' not found in destination group '%s'".formatted(inputPortName, destinationGroup.getIdentifier())));
+
+        final ConnectableComponent connectableDestination = new ConnectableComponent();
+        connectableDestination.setId(destinationPortId);
+        connectableDestination.setGroupId(destinationGroup.getIdentifier());
+        connectableDestination.setName(inputPortName);
+        connectableDestination.setType(ConnectableComponentType.INPUT_PORT);
+
+        // Create the VersionedConnection
+        final VersionedConnection connection = new VersionedConnection();
+        connection.setSource(connectableSource);
+        connection.setDestination(connectableDestination);
+        connection.setIdentifier(sourceGroup.getIdentifier() + "-" + outputPortName + "-" + destinationGroup.getIdentifier() + "-" + inputPortName);
+        connection.setBackPressureDataSizeThreshold("1 GB");
+        connection.setBackPressureObjectThreshold(10000L);
+        connection.setSelectedRelationships(Set.of(""));
+
+        return connection;
     }
 
     private static String getSourceGroupResourceName(final String securityProtocol) {

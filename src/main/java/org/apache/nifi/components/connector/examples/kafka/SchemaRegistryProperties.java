@@ -18,8 +18,8 @@
 package org.apache.nifi.components.connector.examples.kafka;
 
 import org.apache.nifi.components.connector.ConnectorPropertyDescriptor;
+import org.apache.nifi.components.connector.ConfigurationStep;
 import org.apache.nifi.components.connector.ConnectorPropertyGroup;
-import org.apache.nifi.components.connector.ConnectorPropertySubGroup;
 
 import java.util.List;
 
@@ -30,15 +30,15 @@ public class SchemaRegistryProperties {
     private SchemaRegistryProperties() {
     }
 
-    static final ConnectorPropertySubGroup SCHEMA_REGISTRY_SUB_GROUP = new ConnectorPropertySubGroup.Builder()
+    static final ConnectorPropertyGroup SCHEMA_REGISTRY_GROUP = new ConnectorPropertyGroup.Builder()
         .description("Properties for configuring the schema registry")
         .properties(schemaRegistryProperties)
         .build();
 
-    static final ConnectorPropertyGroup SCHEMA_REGISTRY_GROUP = new ConnectorPropertyGroup.Builder()
+    static final ConfigurationStep SCHEMA_REGISTRY_STEP = new ConfigurationStep.Builder()
         .name("Schema Registry")
         .description("Properties for connecting to Snowflake")
-        .subGroups(List.of(SCHEMA_REGISTRY_SUB_GROUP))
+        .propertyGroups(List.of(SCHEMA_REGISTRY_GROUP))
         .build();
 
 }

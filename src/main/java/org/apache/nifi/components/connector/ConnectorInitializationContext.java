@@ -103,11 +103,10 @@ public interface ConnectorInitializationContext {
      * </p>
      *
      * @param updatedRootGroup the new representation of the root process group for the Connector
-     * @param flowDrain a FlowDrain that is capable of draining all data in the flow, if necessary, in order to perform the update reliably.
      */
-    void updateFlow(VersionedProcessGroup updatedRootGroup, FlowDrain flowDrain) throws FlowUpdateException;
+    void updateFlow(VersionedProcessGroup updatedRootGroup) throws FlowUpdateException;
 
-    void updateFlow(VersionedExternalFlow versionedExternalFlow, FlowDrain flowDrain) throws FlowUpdateException;
+    void updateFlow(VersionedExternalFlow versionedExternalFlow) throws FlowUpdateException;
 
     /**
      * The Bundle that the Connector was configured with. If this is not the current Bundle, it implies that the Connector

@@ -18,8 +18,8 @@
 package org.apache.nifi.components.connector.examples.kafka;
 
 import org.apache.nifi.components.connector.ConnectorPropertyDescriptor;
+import org.apache.nifi.components.connector.ConfigurationStep;
 import org.apache.nifi.components.connector.ConnectorPropertyGroup;
-import org.apache.nifi.components.connector.ConnectorPropertySubGroup;
 
 import java.util.List;
 
@@ -52,16 +52,16 @@ public class SnowflakeProperties {
         WAREHOUSE
     );
 
-    static final ConnectorPropertySubGroup SNOWFLAKE_PROPERTY_SUB_GROUP = new ConnectorPropertySubGroup.Builder()
+    static final ConnectorPropertyGroup SNOWFLAKE_GROUP = new ConnectorPropertyGroup.Builder()
         .name("Destination")
         .description("Properties for configuring the Snowflake destination")
         .properties(snowflakeProperties)
         .build();
 
-    static final ConnectorPropertyGroup SNOWFLAKE_PROPERTY_GROUP = new ConnectorPropertyGroup.Builder()
+    static final ConfigurationStep SNOWFLAKE_STEP = new ConfigurationStep.Builder()
         .name("Snowflake Configuration")
         .description("Properties for connecting to Snowflake")
-        .subGroups(List.of(SNOWFLAKE_PROPERTY_SUB_GROUP))
+        .propertyGroups(List.of(SNOWFLAKE_GROUP))
         .build();
 
 }

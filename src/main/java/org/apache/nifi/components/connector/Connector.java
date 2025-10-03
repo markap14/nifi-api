@@ -73,30 +73,38 @@ public interface Connector {
     List<ValidationResult> validate();
 
     /**
-     * Expose the Property Descriptors that are expected to be configurable through the Custom UI.
-     * @return a list of names for all property groups that are exposed by this Connector
+     * Returns the list of configuration steps that define the configuration of this Connector. Each step
+     * represents a logical grouping of properties that should be configured together. The order of the steps
+     * in the list represents the order in which the steps should be configured.
+     * @return the list of configuration steps
      */
-    List<String> getPropertyGroupNames();
+    List<ConfigurationStep> getConfigurationSteps();
 
     /**
-     * Returns the Property Group that corresponds to the given group name. The group name is expected to be in the list of names provided
-     * by {@link #getPropertyGroupNames()}.
-     *
-     * @param groupName the name of the group
-     * @return the Property Group with the given name
-     * @throws IllegalArgumentException if the group name does not exist
+     * Called whenever a specific configuration step has been configured. This allows the Connector to perform any necessary
+     * actions specific to that step, such as updating parameter values, updating the flow, etc.
+     * @param stepName the name of the step
      */
-    ConnectorPropertyGroup getPropertyGroup(String groupName);
+    void onConfigurationStepConfigured(String stepName) throws FlowUpdateException;
 
     /**
-     * The `onConfigured` method is called after the Connector has been (re)configured and is responsible for
-     * performing any necessary actions to ensure that the flow is configured according to the Connector's configuration.
-     *
-     * @throws FlowUpdateException if the Connector fails to update the flow according to its configuration
+     * Called before any updates to the Connector's configuration are applied. This allows the Connector to perform any necessary
+     * preparation work before the configuration is changed, such as stopping the flow, draining queues, etc.
      */
-    void onConfigured() throws FlowUpdateException;
+    void prepareUpdate() throws FlowUpdateException;
 
-    void onPropertyGroupConfigured(String groupName);
+    /**
+     * Called if the update preparation (i.e., {@link #prepareUpdate()}) fails. This allows the Connector to perform any necessary
+     * cleanup work after a failed preparation, such as restarting the flow if it was stopped, etc.
+     * @param cause the cause for the update preparation to be aborted
+     */
+    void abortUpdatePreparation(Throwable cause);
 
-    List<ValidationResult> validatePropertyGroup(String groupName, Map<String, String> propertyValues);
+    /**
+     * Called after all updates to the Connector's configuration have been applied. This allows the Connector to perform any necessary
+     * work after the configuration has been changed, such as starting the flow, etc.
+     */
+    void finishUpdate() throws FlowUpdateException;
+
+    List<ValidationResult> validateConfigurationStep(String stepName, Map<String, String> propertyValues);
 }

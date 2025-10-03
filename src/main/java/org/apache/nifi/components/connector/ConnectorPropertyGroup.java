@@ -18,54 +18,176 @@
 package org.apache.nifi.components.connector;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public final class ConnectorPropertyGroup {
     private final String name;
     private final String description;
-    private final List<ConnectorPropertySubGroup> subGroups;
+    private final List<ConnectorPropertyDescriptor> properties;
 
     private ConnectorPropertyGroup(final Builder builder) {
         this.name = builder.name;
         this.description = builder.description;
-        this.subGroups = Collections.unmodifiableList(builder.subGroups);
+        this.properties = List.copyOf(builder.properties);
     }
 
+    /**
+     * Returns the name of the property sub-group.
+     *
+     * @return the name of the sub-group
+     */
     public String getName() {
         return name;
     }
 
+    /**
+     * Returns the description of the property sub-group.
+     *
+     * @return the description of the sub-group
+     */
     public String getDescription() {
         return description;
     }
 
-    public List<ConnectorPropertySubGroup> getSubGroups() {
-        return subGroups;
+    /**
+     * Returns the properties defined in this sub-group.
+     *
+     * @return the properties in this sub-group
+     */
+    public List<ConnectorPropertyDescriptor> getProperties() {
+        return properties;
     }
 
+    /**
+     * Creates a new Builder for constructing ConnectorPropertySubGroup instances.
+     *
+     * @return a new Builder
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
 
-    public static final class Builder {
+    /**
+     * Creates a new Builder initialized with values from an existing ConnectorPropertySubGroup.
+     *
+     * @param subGroup the sub-group to copy values from
+     * @return a new Builder with copied values
+     */
+    public static Builder builder(final ConnectorPropertyGroup subGroup) {
+        return new Builder()
+                .name(subGroup.getName())
+                .description(subGroup.getDescription())
+                .properties(subGroup.getProperties());
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        ConnectorPropertyGroup that = (ConnectorPropertyGroup) o;
+        return Objects.equals(name, that.name) &&
+               Objects.equals(description, that.description) &&
+               Objects.equals(properties, that.properties);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, description, properties);
+    }
+
+    @Override
+    public String toString() {
+        return "ConnectorPropertyGroup[" +
+               "name='" + name + '\'' +
+               ", description='" + description + '\'' +
+               ", properties=" + properties +
+               "]";
+    }
+
+    public static class Builder {
         private String name;
         private String description;
-        private List<ConnectorPropertySubGroup> subGroups = Collections.emptyList();
+        private final List<ConnectorPropertyDescriptor> properties = new ArrayList<>();
 
-        public Builder name(String name) {
+        /**
+         * Sets the name of the property sub-group.
+         *
+         * @param name the name of the sub-group
+         * @return this Builder for method chaining
+         */
+        public Builder name(final String name) {
             this.name = name;
             return this;
         }
 
-        public Builder description(String description) {
+        /**
+         * Sets the description of the property sub-group.
+         *
+         * @param description the description of the sub-group
+         * @return this Builder for method chaining
+         */
+        public Builder description(final String description) {
             this.description = description;
             return this;
         }
 
-        public Builder subGroups(final List<ConnectorPropertySubGroup> subGroups) {
-            this.subGroups = new ArrayList<>(subGroups);
+        /**
+         * Adds a property to the sub-group.
+         *
+         * @param property the property to add
+         * @return this Builder for method chaining
+         */
+        public Builder addProperty(final ConnectorPropertyDescriptor property) {
+            if (property != null) {
+                this.properties.add(property);
+            }
             return this;
         }
 
+        /**
+         * Sets the properties for the sub-group, replacing any previously added properties.
+         *
+         * @param properties the properties to set
+         * @return this Builder for method chaining
+         */
+        public Builder properties(final List<ConnectorPropertyDescriptor> properties) {
+            this.properties.clear();
+            if (properties != null) {
+                this.properties.addAll(properties);
+            }
+            return this;
+        }
+
+        /**
+         * Adds multiple properties to the sub-group.
+         *
+         * @param properties the properties to add
+         * @return this Builder for method chaining
+         */
+        public Builder addProperties(final List<ConnectorPropertyDescriptor> properties) {
+            if (properties != null) {
+                this.properties.addAll(properties);
+            }
+            return this;
+        }
+
+        /**
+         * Builds and returns a new ConnectorPropertySubGroup instance.
+         *
+         * @return a new ConnectorPropertySubGroup
+         * @throws IllegalStateException if required fields are not set
+         */
         public ConnectorPropertyGroup build() {
+            if (description != null && (name == null || name.isBlank())) {
+                throw new IllegalStateException("Property Group's name must be provided if a description is set");
+            }
+
             return new ConnectorPropertyGroup(this);
         }
     }

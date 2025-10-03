@@ -18,8 +18,8 @@
 package org.apache.nifi.components.connector.examples.kafka;
 
 import org.apache.nifi.components.connector.ConnectorPropertyDescriptor;
+import org.apache.nifi.components.connector.ConfigurationStep;
 import org.apache.nifi.components.connector.ConnectorPropertyGroup;
-import org.apache.nifi.components.connector.ConnectorPropertySubGroup;
 import org.apache.nifi.components.connector.PropertyType;
 import org.apache.nifi.processor.util.StandardValidators;
 
@@ -46,16 +46,16 @@ public class SourceDataProperties {
         .defaultValue("JSON")
         .build();
 
-    static final ConnectorPropertySubGroup SOURCE_DATA_SUB_GROUP = ConnectorPropertySubGroup.builder()
+    static final ConnectorPropertyGroup SOURCE_DATA_GROUP = ConnectorPropertyGroup.builder()
         .name("Source Data")
         .description("Properties for configuring Kafka Topic and data format")
         .properties(List.of(TOPICS))
         .build();
 
-    static final ConnectorPropertyGroup SOURCE_DATA_GROUP = new ConnectorPropertyGroup.Builder()
+    static final ConfigurationStep SOURCE_DATA_STEP = new ConfigurationStep.Builder()
         .name("Kafka Data")
         .description("Properties for configuring the source of data")
-        .subGroups(List.of(SOURCE_DATA_SUB_GROUP))
+        .propertyGroups(List.of(SOURCE_DATA_GROUP))
         .build();
 
 }

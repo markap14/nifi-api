@@ -19,8 +19,8 @@ package org.apache.nifi.components.connector;
 
 public interface ConnectorConfigurationContext {
 
-    String getProperty(String propertyGroupName, String propertyName);
+    String getProperty(String configurationStepName, String propertyName);
 
-    String getProperty(ConnectorPropertyGroup propertyGroup, ConnectorPropertyDescriptor propertyDescriptor);
+    String getProperty(ConfigurationStep configurationStep, ConnectorPropertyDescriptor propertyDescriptor);
 
 }

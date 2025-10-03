@@ -18,8 +18,8 @@
 package org.apache.nifi.components.connector.examples.kafka;
 
 import org.apache.nifi.components.connector.ConnectorPropertyDescriptor;
+import org.apache.nifi.components.connector.ConfigurationStep;
 import org.apache.nifi.components.connector.ConnectorPropertyGroup;
-import org.apache.nifi.components.connector.ConnectorPropertySubGroup;
 import org.apache.nifi.components.connector.PropertyType;
 import org.apache.nifi.processor.util.StandardValidators;
 
@@ -127,24 +127,24 @@ public class KafkaConnectivityProperties {
         AWS_PROFILE_NAME
     );
 
-    static final ConnectorPropertySubGroup KAFKA_BOOTSTRAP_SERVERS_SUBGROUP = new ConnectorPropertySubGroup.Builder()
+    static final ConnectorPropertyGroup KAFKA_BOOTSTRAP_SERVERS_GROUP = new ConnectorPropertyGroup.Builder()
         .name("Kafka Bootstrap Servers")
         .description("Properties for connecting to Kafka Bootstrap Servers")
         .properties(BOOTSTRAP_SERVERS_PROPERTIES)
         .build();
 
-    static final ConnectorPropertySubGroup KAFKA_AUTHENTICATION_SUBGROUP = new ConnectorPropertySubGroup.Builder()
+    static final ConnectorPropertyGroup KAFKA_AUTHENTICATION_GROUP = new ConnectorPropertyGroup.Builder()
         .name("Kafka Authentication")
         .description("Properties for authenticating to Kafka")
         .properties(AUTHENTICATION_PROPERTIES)
         .build();
 
-    static final ConnectorPropertyGroup KAFKA_CONNECTION_PROPERTY_GROUP = new ConnectorPropertyGroup.Builder()
+    static final ConfigurationStep KAFKA_CONNECTION_STEP = new ConfigurationStep.Builder()
         .name("Kafka Connectivity")
         .description("Properties for connecting to Kafka")
-        .subGroups(List.of(
-            KAFKA_BOOTSTRAP_SERVERS_SUBGROUP,
-            KAFKA_AUTHENTICATION_SUBGROUP
+        .propertyGroups(List.of(
+            KAFKA_BOOTSTRAP_SERVERS_GROUP,
+            KAFKA_AUTHENTICATION_GROUP
         ))
         .build();
 

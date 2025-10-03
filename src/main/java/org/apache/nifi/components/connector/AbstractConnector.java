@@ -23,11 +23,7 @@ import org.apache.nifi.components.connector.components.ControllerServiceFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupLifecycle;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
-import org.apache.nifi.flow.ConnectableComponent;
-import org.apache.nifi.flow.ConnectableComponentType;
-import org.apache.nifi.flow.VersionedComponent;
 import org.apache.nifi.flow.VersionedConnection;
-import org.apache.nifi.flow.VersionedProcessGroup;
 import org.apache.nifi.logging.ComponentLog;
 
 import java.util.ArrayList;
@@ -113,9 +109,16 @@ public abstract class AbstractConnector implements Connector {
     protected void drainFlowFiles() throws FlowUpdateException {
         try {
             stopSourceProcessors();
-        } catch (final InterruptedException e) {
+        } catch (final InterruptedException ie) {
             Thread.currentThread().interrupt();
-            throw new FlowUpdateException(e);
+            throw new FlowUpdateException(ie);
+        }
+
+        try {
+            startNonSourceProcessors();
+        } catch (final InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new FlowUpdateException(ie);
         }
 
         try {
@@ -192,55 +195,6 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
-    /**
-     * Creates a VersionedConnection between two Process Groups using the specified port names.
-     * @param sourceGroup the source Process Group
-     * @param outputPortName the name of the output port in the source group
-     * @param destinationGroup the destination Process Group
-     * @param inputPortName the name of the input port in the destination group
-     * @return the created VersionedConnection
-     */
-    protected VersionedConnection createConnection(final VersionedProcessGroup sourceGroup, final String outputPortName,
-        final VersionedProcessGroup destinationGroup, final String inputPortName) {
-
-        // Create the Source ConnectableComponent
-        final String sourcePortId = sourceGroup.getOutputPorts().stream()
-            .filter(port -> port.getName().equals(outputPortName))
-            .findFirst()
-            .map(VersionedComponent::getIdentifier)
-            .orElseThrow(() -> new IllegalArgumentException("Output port '%s' not found in source group '%s'".formatted(outputPortName, sourceGroup.getIdentifier())));
-
-        final ConnectableComponent connectableSource = new ConnectableComponent();
-        connectableSource.setId(sourcePortId);
-        connectableSource.setGroupId(sourceGroup.getIdentifier());
-        connectableSource.setName(outputPortName);
-        connectableSource.setType(ConnectableComponentType.OUTPUT_PORT);
-
-        // Create the Destination ConnectableComponent
-        final String destinationPortId = destinationGroup.getInputPorts().stream()
-            .filter(port -> port.getName().equals(inputPortName))
-            .findFirst()
-            .map(VersionedComponent::getIdentifier)
-            .orElseThrow(() -> new IllegalArgumentException("Input port '%s' not found in destination group '%s'".formatted(inputPortName, destinationGroup.getIdentifier())));
-
-        final ConnectableComponent connectableDestination = new ConnectableComponent();
-        connectableDestination.setId(destinationPortId);
-        connectableDestination.setGroupId(destinationGroup.getIdentifier());
-        connectableDestination.setName(inputPortName);
-        connectableDestination.setType(ConnectableComponentType.INPUT_PORT);
-
-        // Create the VersionedConnection
-        final VersionedConnection connection = new VersionedConnection();
-        connection.setSource(connectableSource);
-        connection.setDestination(connectableDestination);
-        connection.setIdentifier(sourceGroup.getIdentifier() + "-" + outputPortName + "-" + destinationGroup.getIdentifier() + "-" + inputPortName);
-        connection.setBackPressureDataSizeThreshold("1 GB");
-        connection.setBackPressureObjectThreshold(10000L);
-        connection.setSelectedRelationships(Set.of(""));
-
-        return connection;
-    }
-
     protected boolean isGroupDrained(final ProcessGroupFacade group) {
         return group.getQueueSize().getObjectCount() == 0;
     }
@@ -260,7 +214,26 @@ public abstract class AbstractConnector implements Connector {
         } catch (final InterruptedException ie) {
             throw ie;
         } catch (final Exception e) {
-            throw new FlowUpdateException("Failed to stop all Source Processors", e);
+            throw new FlowUpdateException("Failed to stop all source Processors", e);
+        }
+    }
+
+    protected void startNonSourceProcessors() throws InterruptedException, FlowUpdateException {
+        final List<ProcessorFacade> nonSourceProcessors = getNonSourceProcessors();
+
+        final List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+        for (final ProcessorFacade nonSourceProcessor : nonSourceProcessors) {
+            final Future<Void> startFuture = nonSourceProcessor.getLifecycle().start();
+            startFutures.add(toCompletableFuture(startFuture));
+        }
+
+        final CompletableFuture<Void> allStarted = CompletableFuture.allOf(startFutures.toArray(new CompletableFuture[0]));
+        try {
+            allStarted.get();
+        } catch (final InterruptedException ie) {
+            throw ie;
+        } catch (final Exception e) {
+            throw new FlowUpdateException("Failed to start all non-source Processors", e);
         }
     }
 
@@ -281,6 +254,19 @@ public abstract class AbstractConnector implements Connector {
 
     protected List<ProcessorFacade> getSourceProcessors() {
         final ProcessGroupFacade group = getInitializationContext().getRootGroup();
+        final Set<String> nonSourceIds = getNonSourceProcessorIds(group);
+
+        return findProcessors(group, processor -> !nonSourceIds.contains(processor.getDefinition().getIdentifier()));
+    }
+
+    protected List<ProcessorFacade> getNonSourceProcessors() {
+        final ProcessGroupFacade group = getInitializationContext().getRootGroup();
+        final Set<String> nonSourceIds = getNonSourceProcessorIds(group);
+
+        return findProcessors(group, processor -> nonSourceIds.contains(processor.getDefinition().getIdentifier()));
+    }
+
+    protected Set<String> getNonSourceProcessorIds(final ProcessGroupFacade group) {
         final Set<String> destinationIds = new HashSet<>();
         forEachConnection(group, conn -> {
             final VersionedConnection definition = conn.getDefinition();
@@ -291,7 +277,7 @@ public abstract class AbstractConnector implements Connector {
             }
         });
 
-        return findProcessors(group, processor -> !destinationIds.contains(processor.getDefinition().getIdentifier()));
+        return destinationIds;
     }
 
     protected List<ProcessorFacade> findProcessors(final ProcessGroupFacade group, final Predicate<ProcessorFacade> filter) {
@@ -322,21 +308,21 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
-    protected String getProperty(final String propertyGroupName, final String propertyName) {
+    protected String getProperty(final String configurationStepName, final String propertyName) {
         final ConnectorConfigurationContext configurationContext = getInitializationContext().getConfigurationContext();
         if (configurationContext == null) {
             return null;
         }
 
-        return configurationContext.getProperty(propertyGroupName, propertyName);
+        return configurationContext.getProperty(configurationStepName, propertyName);
     }
 
-    protected String getProperty(final ConnectorPropertyGroup propertyGroup, final ConnectorPropertyDescriptor propertyDescriptor) {
+    protected String getProperty(final ConfigurationStep configurationStep, final ConnectorPropertyDescriptor propertyDescriptor) {
         final ConnectorConfigurationContext configurationContext = getInitializationContext().getConfigurationContext();
         if (configurationContext == null) {
-            return null;
+            return propertyDescriptor.getDefaultValue();
         }
 
-        return configurationContext.getProperty(propertyGroup, propertyDescriptor);
+        return configurationContext.getProperty(configurationStep, propertyDescriptor);
     }
 }
