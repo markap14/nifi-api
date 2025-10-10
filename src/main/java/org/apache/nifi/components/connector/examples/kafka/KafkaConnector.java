@@ -64,7 +64,7 @@ public class KafkaConnector extends AbstractConnector {
         steps.add(KafkaConnectivityProperties.KAFKA_CONNECTION_STEP);
         steps.add(SourceDataProperties.SOURCE_DATA_STEP);
 
-        final String dataFormat = getProperty(SourceDataProperties.SOURCE_DATA_STEP, SourceDataProperties.DATA_FORMAT);
+        final String dataFormat = getProperty(SourceDataProperties.SOURCE_DATA_STEP, SourceDataProperties.DATA_FORMAT).getValue();
         if ("AVRO".equalsIgnoreCase(dataFormat)) {
             steps.add(SchemaRegistryProperties.SCHEMA_REGISTRY_STEP);
         }
@@ -117,7 +117,7 @@ public class KafkaConnector extends AbstractConnector {
 
     private VersionedProcessGroup buildFlowDefinition() throws IOException {
         final String securityProtocol = getInitializationContext().getConfigurationContext().getProperty(
-            KafkaConnectivityProperties.KAFKA_CONNECTION_STEP, KafkaConnectivityProperties.SECURITY_PROTOCOL);
+            KafkaConnectivityProperties.KAFKA_CONNECTION_STEP, KafkaConnectivityProperties.SECURITY_PROTOCOL).getValue();
         final String sourceGroupResourceName = getSourceGroupResourceName(securityProtocol);
 
         final VersionedProcessGroup sourceGroupFlow = readFlowDefinition(sourceGroupResourceName);

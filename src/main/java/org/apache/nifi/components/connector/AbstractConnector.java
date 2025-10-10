@@ -308,19 +308,19 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
-    protected String getProperty(final String configurationStepName, final String propertyName) {
+    protected ConnectorPropertyValue getProperty(final String configurationStepName, final String propertyName) {
         final ConnectorConfigurationContext configurationContext = getInitializationContext().getConfigurationContext();
         if (configurationContext == null) {
-            return null;
+            return EmptyPropertyValue.INSTANCE;
         }
 
         return configurationContext.getProperty(configurationStepName, propertyName);
     }
 
-    protected String getProperty(final ConfigurationStep configurationStep, final ConnectorPropertyDescriptor propertyDescriptor) {
+    protected ConnectorPropertyValue getProperty(final ConfigurationStep configurationStep, final ConnectorPropertyDescriptor propertyDescriptor) {
         final ConnectorConfigurationContext configurationContext = getInitializationContext().getConfigurationContext();
         if (configurationContext == null) {
-            return propertyDescriptor.getDefaultValue();
+            return EmptyPropertyValue.INSTANCE;
         }
 
         return configurationContext.getProperty(configurationStep, propertyDescriptor);
