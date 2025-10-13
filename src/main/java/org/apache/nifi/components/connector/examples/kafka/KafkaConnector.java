@@ -88,7 +88,7 @@ public class KafkaConnector extends AbstractConnector {
     }
 
     @Override
-    public void prepareUpdate() {
+    public void prepareForUpdate() {
     }
 
     @Override

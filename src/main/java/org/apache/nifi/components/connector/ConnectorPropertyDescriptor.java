@@ -19,14 +19,24 @@ package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.DescribedValue;
+import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.PropertyValue;
+import org.apache.nifi.components.ValidationContext;
+import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
+import org.apache.nifi.controller.ControllerService;
+import org.apache.nifi.controller.ControllerServiceLookup;
+import org.apache.nifi.documentation.init.EmptyControllerServiceLookup;
+import org.apache.nifi.expression.ExpressionLanguageCompiler;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -38,6 +48,7 @@ public final class ConnectorPropertyDescriptor {
     private final PropertyType type;
     private final List<DescribedValue> allowableValues;
     private final List<Validator> validators;
+    private final Set<ConnectorPropertyDependency> dependencies;
 
     private ConnectorPropertyDescriptor(final Builder builder) {
         this.name = builder.name;
@@ -47,6 +58,7 @@ public final class ConnectorPropertyDescriptor {
         this.type = builder.type;
         this.allowableValues = builder.allowableValues == null ? null : Collections.unmodifiableList(builder.allowableValues);
         this.validators = List.copyOf(builder.validators);
+        this.dependencies = builder.dependencies;
     }
 
     public String getName() {
@@ -73,8 +85,43 @@ public final class ConnectorPropertyDescriptor {
         return allowableValues;
     }
 
+    public Set<ConnectorPropertyDependency> getDependencies() {
+        return dependencies;
+    }
+
     public List<Validator> getValidators() {
         return validators;
+    }
+
+    public ValidationResult validate(final String value) {
+        if (allowableValues != null && !allowableValues.isEmpty()) {
+            final boolean valueAllowed = allowableValues.stream()
+                .map(DescribedValue::getValue)
+                .anyMatch(val -> val.equals(value));
+
+            if (!valueAllowed) {
+                return new ValidationResult.Builder()
+                    .subject(name)
+                    .input(value)
+                    .valid(false)
+                    .explanation("Value is not one of the allowable values")
+                    .build();
+            }
+        }
+
+        final ValidationContext validationContext = new ConnectorValidationContext(name, value);
+        for (final Validator validator : validators) {
+            final ValidationResult result = validator.validate(name, value, validationContext);
+            if (!result.isValid()) {
+                return result;
+            }
+        }
+
+        return new ValidationResult.Builder()
+            .subject(name)
+            .input(value)
+            .valid(true)
+            .build();
     }
 
 
@@ -256,4 +303,94 @@ public final class ConnectorPropertyDescriptor {
         }
     }
 
+    private static class ConnectorValidationContext implements ValidationContext {
+        private final ControllerServiceLookup controllerServiceLookup = new EmptyControllerServiceLookup();
+        private final String propertyName;
+        private final String propertyValue;
+
+        public ConnectorValidationContext(final String propertyName, final String propertyValue) {
+            this.propertyName = propertyName;
+            this.propertyValue = propertyValue;
+        }
+
+        @Override
+        public ControllerServiceLookup getControllerServiceLookup() {
+            return controllerServiceLookup;
+        }
+
+        @Override
+        public ValidationContext getControllerServiceValidationContext(final ControllerService controllerService) {
+            return null;
+        }
+
+        @Override
+        public ExpressionLanguageCompiler newExpressionLanguageCompiler() {
+            return null;
+        }
+
+        @Override
+        public PropertyValue newPropertyValue(final String value) {
+            return null;
+        }
+
+        @Override
+        public Map<PropertyDescriptor, String> getProperties() {
+            final PropertyDescriptor propertyDescriptor = new PropertyDescriptor.Builder()
+                .name(propertyName)
+                .addValidator(Validator.VALID)
+                .build();
+
+            return Map.of(propertyDescriptor, propertyValue);
+        }
+
+        @Override
+        public String getAnnotationData() {
+            return null;
+        }
+
+        @Override
+        public boolean isValidationRequired(final ControllerService service) {
+            return false;
+        }
+
+        @Override
+        public boolean isExpressionLanguagePresent(final String value) {
+            return false;
+        }
+
+        @Override
+        public boolean isExpressionLanguageSupported(final String propertyName) {
+            return false;
+        }
+
+        @Override
+        public String getProcessGroupIdentifier() {
+            return null;
+        }
+
+        @Override
+        public Collection<String> getReferencedParameters(final String propertyName) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public boolean isParameterDefined(final String parameterName) {
+            return false;
+        }
+
+        @Override
+        public boolean isParameterSet(final String parameterName) {
+            return false;
+        }
+
+        @Override
+        public PropertyValue getProperty(final PropertyDescriptor descriptor) {
+            return null;
+        }
+
+        @Override
+        public Map<String, String> getAllProperties() {
+            return Map.of(propertyName, propertyValue);
+        }
+    }
 }

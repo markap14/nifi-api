@@ -91,10 +91,10 @@ public interface Connector {
      * Called before any updates to the Connector's configuration are applied. This allows the Connector to perform any necessary
      * preparation work before the configuration is changed, such as stopping the flow, draining queues, etc.
      */
-    void prepareUpdate() throws FlowUpdateException;
+    void prepareForUpdate() throws FlowUpdateException;
 
     /**
-     * Called if the update preparation (i.e., {@link #prepareUpdate()}) fails. This allows the Connector to perform any necessary
+     * Called if the update preparation (i.e., {@link #prepareForUpdate()}) fails. This allows the Connector to perform any necessary
      * cleanup work after a failed preparation, such as restarting the flow if it was stopped, etc.
      * @param cause the cause for the update preparation to be aborted
      */
@@ -107,4 +107,7 @@ public interface Connector {
     void finishUpdate() throws FlowUpdateException;
 
     List<ValidationResult> validateConfigurationStep(String stepName, Map<String, String> propertyValues);
+
+    List<ValidationResult> validate(ConnectorConfigurationContext context);
+
 }

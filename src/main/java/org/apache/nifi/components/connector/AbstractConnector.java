@@ -27,6 +27,8 @@ import org.apache.nifi.flow.VersionedConnection;
 import org.apache.nifi.logging.ComponentLog;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +37,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public abstract class AbstractConnector implements Connector {
     private volatile ConnectorInitializationContext initializationContext;
@@ -324,5 +328,132 @@ public abstract class AbstractConnector implements Connector {
         }
 
         return configurationContext.getProperty(configurationStep, propertyDescriptor);
+    }
+
+    @Override
+    public List<ValidationResult> validate(final ConnectorConfigurationContext context) {
+        final List<ValidationResult> results = new ArrayList<>();
+        final List<ConfigurationStep> configurationSteps = getConfigurationSteps();
+
+        for (final ConfigurationStep configurationStep : configurationSteps) {
+            final List<ConnectorPropertyGroup> propertyGroups = configurationStep.getPropertyGroups();
+
+            for (final ConnectorPropertyGroup propertyGroup : propertyGroups) {
+                final List<ConnectorPropertyDescriptor> descriptors = propertyGroup.getProperties();
+                final Map<String, ConnectorPropertyDescriptor> descriptorMap = descriptors.stream()
+                    .collect(Collectors.toMap(ConnectorPropertyDescriptor::getName, Function.identity()));
+                final Function<String, ConnectorPropertyValue> propertyValueLookup =
+                    name -> context.getProperty(configurationStep.getName(), name);
+
+                for (final ConnectorPropertyDescriptor descriptor : descriptors) {
+                    final boolean dependencySatisfied = isDependencySatisfied(descriptor, descriptorMap::get, propertyValueLookup);
+
+                    // If the property descriptor's dependency is not satisfied, the property does not need to be considered, as it's not relevant to the
+                    if (!dependencySatisfied) {
+                        continue;
+                    }
+
+                    final ConnectorPropertyValue propertyValue = context.getProperty(configurationStep.getName(), descriptor.getName());
+                    if (propertyValue == null) {
+                        if (descriptor.isRequired()) {
+                            final ValidationResult invalidResult = new ValidationResult.Builder()
+                                .valid(false)
+                                .input(null)
+                                .subject(descriptor.getName())
+                                .explanation(descriptor.getName() + " is required")
+                                .build();
+                            results.add(invalidResult);
+                        }
+
+                        continue;
+                    }
+
+                    final ValidationResult result = descriptor.validate(propertyValue.getValue());
+                    if (!result.isValid()) {
+                        results.add(result);
+                    }
+                }
+            }
+        }
+
+        // only run customValidate if regular validation is successful. This allows Processor developers to not have to check
+        // if values are null or invalid so that they can focus only on the interaction between the properties, etc.
+        if (results.isEmpty()) {
+            final Collection<ValidationResult> customResults = customValidate(context);
+            if (null != customResults) {
+                for (final ValidationResult result : customResults) {
+                    if (!result.isValid()) {
+                        results.add(result);
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private boolean isDependencySatisfied(final ConnectorPropertyDescriptor propertyDescriptor, final Function<String, ConnectorPropertyDescriptor> propertyDescriptorLookup,
+            final Function<String, ConnectorPropertyValue> propertyValueLookup) {
+
+        return isDependencySatisfied(propertyDescriptor, propertyDescriptorLookup, propertyValueLookup, new HashSet<>());
+    }
+
+    private boolean isDependencySatisfied(final ConnectorPropertyDescriptor propertyDescriptor, final Function<String, ConnectorPropertyDescriptor> propertyDescriptorLookup,
+            final Function<String, ConnectorPropertyValue> propertyValueLookup, final Set<String> propertiesSeen) {
+
+        final Set<ConnectorPropertyDependency> dependencies = propertyDescriptor.getDependencies();
+        if (dependencies.isEmpty()) {
+            return true;
+        }
+
+        final boolean added = propertiesSeen.add(propertyDescriptor.getName());
+        if (!added) {
+            return false;
+        }
+
+        try {
+            for (final ConnectorPropertyDependency dependency : dependencies) {
+                final String dependencyName = dependency.getPropertyName();
+
+                // Check if the property being depended upon has its dependencies satisfied.
+                final ConnectorPropertyDescriptor dependencyDescriptor = propertyDescriptorLookup.apply(dependencyName);
+                if (dependencyDescriptor == null) {
+                    return false;
+                }
+
+                final ConnectorPropertyValue propertyValue = propertyValueLookup.apply(dependencyDescriptor.getName());
+                final String dependencyValue = propertyValue == null ? dependencyDescriptor.getDefaultValue() : propertyValue.getValue();
+                if (dependencyValue == null) {
+                    return false;
+                }
+
+                final boolean transitiveDependencySatisfied = isDependencySatisfied(dependencyDescriptor, propertyDescriptorLookup, propertyValueLookup, propertiesSeen);
+                if (!transitiveDependencySatisfied) {
+                    return false;
+                }
+
+                // Check if the property being depended upon is set to one of the values that satisfies this dependency.
+                // If the dependency has no dependent values, then any non-null value satisfies the dependency.
+                // The value is already known to be non-null due to the check above.
+                final Set<String> dependentValues = dependency.getDependentValues();
+                if (dependentValues != null && !dependentValues.contains(dependencyValue)) {
+                    return false;
+                }
+            }
+
+            return true;
+        } finally {
+            propertiesSeen.remove(propertyDescriptor.getName());
+        }
+    }
+
+    /**
+     * No-op implementation that allows concrete subclasses to perform validation of property configuration
+     *
+     * @param context the context that should be used for validation
+     * @return a collection of validation results indicating any problems with the configuration.
+     */
+    protected Collection<ValidationResult> customValidate(final ConnectorConfigurationContext context) {
+        return Collections.emptyList();
     }
 }
