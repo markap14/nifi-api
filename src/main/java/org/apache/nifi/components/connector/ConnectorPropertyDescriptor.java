@@ -38,9 +38,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public final class ConnectorPropertyDescriptor {
+    private static final Pattern INTEGER_PATTERN = Pattern.compile("^-?\\d+$");
+    private static final Pattern DOUBLE_PATTERN = Pattern.compile("^-?\\d+(\\.\\d+)?$");
+    private static final Pattern BOOLEAN_PATTERN = Pattern.compile("^(?i)(true|false)$");
+
     private final String name;
     private final String description;
     private final String defaultValue;
@@ -58,7 +63,7 @@ public final class ConnectorPropertyDescriptor {
         this.type = builder.type;
         this.allowableValues = builder.allowableValues == null ? null : Collections.unmodifiableList(builder.allowableValues);
         this.validators = List.copyOf(builder.validators);
-        this.dependencies = builder.dependencies;
+        this.dependencies = Collections.unmodifiableSet(builder.dependencies);
     }
 
     public String getName() {
@@ -109,6 +114,11 @@ public final class ConnectorPropertyDescriptor {
             }
         }
 
+        final ValidationResult invalidResult = validateType(value);
+        if (invalidResult != null) {
+            return invalidResult;
+        }
+
         final ValidationContext validationContext = new ConnectorValidationContext(name, value);
         for (final Validator validator : validators) {
             final ValidationResult result = validator.validate(name, value, validationContext);
@@ -124,6 +134,26 @@ public final class ConnectorPropertyDescriptor {
             .build();
     }
 
+    private ValidationResult validateType(final String value) {
+        final String explanation = switch (type) {
+            case PASSWORD, STRING, STRING_LIST -> null;
+            case BOOLEAN -> BOOLEAN_PATTERN.matcher(value).matches() ? null : "Value must be true or false";
+            case INTEGER -> INTEGER_PATTERN.matcher(value).matches() ? null : "Value must be an integer";
+            case DOUBLE, FLOAT -> DOUBLE_PATTERN.matcher(value).matches() ? null : "Value must be a floating point number";
+        };
+
+        if (explanation == null) {
+            return null;
+        }
+
+        return new ValidationResult.Builder()
+            .subject(name)
+            .input(value)
+            .valid(false)
+            .explanation(explanation)
+            .build();
+    }
+
 
     public static final class Builder {
         private String name;
@@ -134,6 +164,20 @@ public final class ConnectorPropertyDescriptor {
         private List<DescribedValue> allowableValues = null;
         private final List<Validator> validators = new ArrayList<>();
         private final Set<ConnectorPropertyDependency> dependencies = new HashSet<>();
+
+        public Builder from(final ConnectorPropertyDescriptor other) {
+            this.name = other.name;
+            this.description = other.description;
+            this.defaultValue = other.defaultValue;
+            this.required = other.required;
+            this.type = other.type;
+            this.allowableValues = other.allowableValues == null ? null : new ArrayList<>(other.allowableValues);
+            this.validators.clear();
+            this.validators.addAll(other.validators);
+            this.dependencies.clear();
+            this.dependencies.addAll(other.dependencies);
+            return this;
+        }
 
         public Builder name(final String name) {
             this.name = name;
@@ -212,6 +256,18 @@ public final class ConnectorPropertyDescriptor {
             return this;
         }
 
+        public Builder allowableValues(final List<String> allowableValues) {
+            if (allowableValues == null || allowableValues.isEmpty()) {
+                this.allowableValues = null;
+            } else {
+                this.allowableValues = allowableValues.stream()
+                    .map(Builder::describedValue)
+                    .toList();
+            }
+
+            return this;
+        }
+
         /**
          * Adds a validator for this property
          *
@@ -269,8 +325,11 @@ public final class ConnectorPropertyDescriptor {
             return this;
         }
 
-        public Builder dependsOn(final ConnectorPropertyDescriptor descriptor, final DescribedValue... dependentValues) {
-            return dependsOn(descriptor, Arrays.asList(dependentValues));
+        public Builder dependsOn(final ConnectorPropertyDescriptor descriptor, final DescribedValue firstDependentValue, final DescribedValue... additionalDependentValues) {
+            final List<DescribedValue> dependentValues = new ArrayList<>();
+            dependentValues.add(firstDependentValue);
+            dependentValues.addAll(Arrays.asList(additionalDependentValues));
+            return dependsOn(descriptor, dependentValues);
         }
 
         public Builder dependsOn(final ConnectorPropertyDescriptor descriptor, final String... dependentValues) {

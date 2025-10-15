@@ -17,8 +17,11 @@
 
 package org.apache.nifi.components.connector.components;
 
+import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.InvocationFailedException;
+import org.apache.nifi.flow.VersionedExternalFlow;
+import org.apache.nifi.flow.VersionedParameterContext;
 import org.apache.nifi.flow.VersionedProcessor;
 
 import java.util.List;
@@ -32,6 +35,13 @@ public interface ProcessorFacade {
 
     List<ValidationResult> validate(Map<String, String> propertyValues);
 
+    List<ConfigVerificationResult> verify(Map<String, String> propertyValues, Map<String, String> attributes);
+
+    List<ConfigVerificationResult> verify(Map<String, String> propertyValues, VersionedParameterContext parameterContext, Map<String, String> attributes);
+
+    List<ConfigVerificationResult> verify(VersionedExternalFlow versionedExternalFlow, Map<String, String> attributes);
+
     Object invokeConnectorMethod(String methodName, Map<String, Object> arguments) throws InvocationFailedException;
 
+    <T> T invokeConnectorMethod(String methodName, Map<String, Object> arguments, Class<T> returnType) throws InvocationFailedException;
 }

@@ -17,9 +17,12 @@
 
 package org.apache.nifi.components.connector.components;
 
+import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.InvocationFailedException;
 import org.apache.nifi.flow.VersionedControllerService;
+import org.apache.nifi.flow.VersionedExternalFlow;
+import org.apache.nifi.flow.VersionedParameterContext;
 
 import java.util.List;
 import java.util.Map;
@@ -32,6 +35,14 @@ public interface ControllerServiceFacade {
 
     List<ValidationResult> validate(Map<String, String> propertyValues);
 
+    List<ConfigVerificationResult> verify(Map<String, String> propertyValues, Map<String, String> variables);
+
+    List<ConfigVerificationResult> verify(Map<String, String> propertyValues, VersionedParameterContext parameterContext, Map<String, String> variables);
+
+    List<ConfigVerificationResult> verify(VersionedExternalFlow versionedExternalFlow, Map<String, String> variables);
+
     Object invokeConnectorMethod(String methodName, Map<String, Object> arguments) throws InvocationFailedException;
+
+    <T> T invokeConnectorMethod(String methodName, Map<String, Object> arguments, Class<T> returnType) throws InvocationFailedException;
 
 }

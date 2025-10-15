@@ -23,6 +23,7 @@ import org.apache.nifi.components.connector.components.ControllerServiceFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupLifecycle;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
+import org.apache.nifi.components.connector.components.ProcessorState;
 import org.apache.nifi.flow.VersionedConnection;
 import org.apache.nifi.logging.ComponentLog;
 
@@ -36,6 +37,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -90,20 +93,33 @@ public abstract class AbstractConnector implements Connector {
 
     @Override
     public void stop() throws FlowUpdateException {
-        final ProcessGroupLifecycle lifecycle = getInitializationContext().getRootGroup().getLifecycle();
+        final ProcessGroupFacade rootGroup = getInitializationContext().getRootGroup();
+        final ProcessGroupLifecycle lifecycle = rootGroup.getLifecycle();
         try {
-            lifecycle.stopProcessors().get();
+            lifecycle.stopProcessors().get(1, TimeUnit.MINUTES);
+        } catch (final TimeoutException timeoutException) {
+            final List<ProcessorFacade> running = findProcessors(rootGroup, processor ->
+                processor.getLifecycle().getState() != ProcessorState.STOPPED && processor.getLifecycle().getState() != ProcessorState.DISABLED);
+
+            if (!running.isEmpty()) {
+                getLogger().warn("After waiting 60 seconds for all Processors to stop, {} are still running. Terminating now.", running.size());
+                running.forEach(processor -> processor.getLifecycle().terminate());
+            }
         } catch (final Exception e) {
             throw new FlowUpdateException("Failed to stop all Processors", e);
         }
 
         try {
-            lifecycle.disableControllerServices().get();
+            lifecycle.disableControllerServices().get(1, TimeUnit.MINUTES);
         } catch (final Exception e) {
-            throw new RuntimeException("Failed to disable Controller Services", e);
+            throw new FlowUpdateException("Failed to disable Controller Services", e);
         }
     }
 
+    @Override
+    public void prepareForUpdate() throws FlowUpdateException {
+        stop();
+    }
 
     /**
      * Drains all FlowFiles from the Connector instance.

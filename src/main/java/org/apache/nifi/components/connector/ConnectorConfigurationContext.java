@@ -17,10 +17,19 @@
 
 package org.apache.nifi.components.connector;
 
+import java.util.Map;
+
 public interface ConnectorConfigurationContext {
 
     ConnectorPropertyValue getProperty(String configurationStepName, String propertyName);
 
     ConnectorPropertyValue getProperty(ConfigurationStep configurationStep, ConnectorPropertyDescriptor propertyDescriptor);
 
+    /**
+     * Creates a new ConnectorConfigurationContext based on this context's values but with the provided property overrides applied.
+     * @param stepName the name of the configuration step for which the overrides should be applied
+     * @param propertyOverrides the property overrides to apply
+     * @return a new ConnectorConfigurationContext with the overrides applied
+     */
+    ConnectorConfigurationContext createWithOverrides(String stepName, Map<String, String> propertyOverrides);
 }
