@@ -20,6 +20,7 @@ package org.apache.nifi.components.connector;
 import org.apache.nifi.processor.DataUnit;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public interface ConnectorPropertyValue {
@@ -86,6 +87,13 @@ public interface ConnectorPropertyValue {
      * <code>null</code>
      */
     Double asDataSize(DataUnit dataUnit);
+
+    /**
+     * Returns the value as a comma-separated list of values. Leading and trailing
+     * whitespace is trimmed from each value.
+     * @return the property value as a List of Strings
+     */
+    List<String> asList();
 
     /**
      * @return <code>true</code> if the user has configured a value, or if the

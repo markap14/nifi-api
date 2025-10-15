@@ -20,6 +20,8 @@ package org.apache.nifi.components.connector;
 import org.apache.nifi.processor.DataUnit;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class EmptyPropertyValue implements ConnectorPropertyValue {
@@ -72,6 +74,11 @@ public class EmptyPropertyValue implements ConnectorPropertyValue {
     @Override
     public Double asDataSize(final DataUnit dataUnit) {
         return null;
+    }
+
+    @Override
+    public List<String> asList() {
+        return Collections.emptyList();
     }
 
     @Override

@@ -99,6 +99,35 @@ public final class ConnectorPropertyDescriptor {
     }
 
     public ValidationResult validate(final String value) {
+        if (type != PropertyType.STRING_LIST) {
+            return validateIndividual(value);
+        }
+
+        if (required && value == null) {
+            return new ValidationResult.Builder()
+                .subject(name)
+                .input(value)
+                .valid(false)
+                .explanation("Property is required but no value was specified")
+                .build();
+        }
+
+        final String[] values = value.split(",");
+        for (final String individualValue : values) {
+            final ValidationResult result = validateIndividual(individualValue.trim());
+            if (!result.isValid()) {
+                return result;
+            }
+        }
+
+        return new ValidationResult.Builder()
+            .subject(name)
+            .input(value)
+            .valid(true)
+            .build();
+    }
+
+    private ValidationResult validateIndividual(final String value) {
         if (allowableValues != null && !allowableValues.isEmpty()) {
             final boolean valueAllowed = allowableValues.stream()
                 .map(DescribedValue::getValue)
