@@ -17,6 +17,7 @@
 
 package org.apache.nifi.components.connector;
 
+import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ValidationResult;
 
 import java.util.List;
@@ -106,7 +107,7 @@ public interface Connector {
      */
     void finishUpdate() throws FlowUpdateException;
 
-    List<ValidationResult> validateConfigurationStep(String stepName, Map<String, String> propertyValues);
+    List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues);
 
     List<ValidationResult> validate(ConnectorConfigurationContext context);
 

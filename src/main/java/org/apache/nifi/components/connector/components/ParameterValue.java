@@ -52,6 +52,16 @@ public class ParameterValue {
         return assets;
     }
 
+    @Override
+    public String toString() {
+        return "ParameterValue{" +
+                "name=" + name +
+                ", value=" + (sensitive ? "****" : value) +
+                ", sensitive=" + sensitive +
+                ", assets=" + assets +
+                '}';
+    }
+
     public static class Builder {
         private String name;
         private String value;

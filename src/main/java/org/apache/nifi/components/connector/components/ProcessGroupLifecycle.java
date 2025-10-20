@@ -17,13 +17,18 @@
 
 package org.apache.nifi.components.connector.components;
 
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
 public interface ProcessGroupLifecycle {
 
     CompletableFuture<Void> enableControllerServices();
 
+    CompletableFuture<Void> enableControllerServices(Collection<String> serviceIdentifiers);
+
     CompletableFuture<Void> disableControllerServices();
+
+    CompletableFuture<Void> disableControllerServices(Collection<String> serviceIdentifiers);
 
     CompletableFuture<Void> startProcessors();
 
