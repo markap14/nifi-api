@@ -17,21 +17,16 @@
 
 package org.apache.nifi.components.connector.components;
 
-import java.util.Collection;
-import java.util.concurrent.CompletableFuture;
+public enum ControllerServiceReferenceScope {
 
-public interface ProcessGroupLifecycle {
+    /**
+     * Enable all Controller Services in this Process Group and all child Process Groups.
+     */
+    INCLUDE_ALL,
 
-    CompletableFuture<Void> enableControllerServices(ControllerServiceReferenceScope scope, ControllerServiceReferenceHierarchy hierarchy);
-
-    CompletableFuture<Void> enableControllerServices(Collection<String> serviceIdentifiers);
-
-    CompletableFuture<Void> disableControllerServices(ControllerServiceReferenceHierarchy hierarchy);
-
-    CompletableFuture<Void> disableControllerServices(Collection<String> serviceIdentifiers);
-
-    CompletableFuture<Void> startProcessors();
-
-    CompletableFuture<Void> stopProcessors();
-
+    /**
+     * Enable only those Controller Services that are directly referenced by Processors in this group and
+     * Controller Services that are referenced by those Controller Services, recursively.
+     */
+    INCLUDE_REFERENCED_SERVICES_ONLY;
 }

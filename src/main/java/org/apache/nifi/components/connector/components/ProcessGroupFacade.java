@@ -34,6 +34,8 @@ public interface ProcessGroupFacade {
 
     Set<ControllerServiceFacade> getControllerServices();
 
+    Set<ControllerServiceFacade> getControllerServices(ControllerServiceReferenceScope referenceScope, ControllerServiceReferenceHierarchy hierarchy);
+
     ConnectionFacade getConnection(String id);
 
     Set<ConnectionFacade> getConnections();
@@ -43,6 +45,8 @@ public interface ProcessGroupFacade {
     Set<ProcessGroupFacade> getProcessGroups();
 
     QueueSize getQueueSize();
+
+    boolean isFlowEmpty();
 
     StatelessGroupLifecycle getStatelessLifecycle();
 

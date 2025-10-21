@@ -44,6 +44,41 @@ public final class ConfigurationStep {
         return propertyGroups;
     }
 
+    public ConfigurationStep withAllowableValues(final String groupName, final String propertyName, final List<String> allowableValues) {
+        final List<ConnectorPropertyGroup> updatedGroups = new ArrayList<>();
+        for (final ConnectorPropertyGroup group : propertyGroups) {
+            if (group.getName().equals(groupName)) {
+                final List<ConnectorPropertyDescriptor> properties = group.getProperties();
+                final List<ConnectorPropertyDescriptor> enrichedProperties = new ArrayList<>();
+                for (final ConnectorPropertyDescriptor property : properties) {
+                    if (property.getName().equals(propertyName)) {
+                        enrichedProperties.add(new ConnectorPropertyDescriptor.Builder()
+                            .from(property)
+                            .allowableValues(allowableValues)
+                            .build());
+                    } else {
+                        enrichedProperties.add(property);
+                    }
+                }
+
+                final ConnectorPropertyGroup updatedGroup = new ConnectorPropertyGroup.Builder()
+                    .name(group.getName())
+                    .description(group.getDescription())
+                    .properties(enrichedProperties)
+                    .build();
+
+                updatedGroups.add(updatedGroup);
+            } else {
+                updatedGroups.add(group);
+            }
+        }
+
+        return new Builder()
+            .name(name)
+            .description(description)
+            .propertyGroups(updatedGroups)
+            .build();
+    }
 
     public static final class Builder {
         private String name;

@@ -19,7 +19,9 @@ package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.components.ConnectionFacade;
+import org.apache.nifi.components.connector.components.ControllerServiceReferenceScope;
 import org.apache.nifi.components.connector.components.ControllerServiceFacade;
+import org.apache.nifi.components.connector.components.ControllerServiceReferenceHierarchy;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupLifecycle;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
@@ -83,7 +85,7 @@ public abstract class AbstractConnector implements Connector {
         final ProcessGroupLifecycle lifecycle = getInitializationContext().getRootGroup().getLifecycle();
 
         try {
-            lifecycle.enableControllerServices().get();
+            lifecycle.enableControllerServices(ControllerServiceReferenceScope.INCLUDE_REFERENCED_SERVICES_ONLY, ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS).get();
         } catch (final Exception e) {
             throw new FlowUpdateException("Failed to enable Controller Services", e);
         }
@@ -110,7 +112,7 @@ public abstract class AbstractConnector implements Connector {
         }
 
         try {
-            lifecycle.disableControllerServices().get(1, TimeUnit.MINUTES);
+            lifecycle.disableControllerServices(ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS).get(1, TimeUnit.MINUTES);
         } catch (final Exception e) {
             throw new FlowUpdateException("Failed to disable Controller Services", e);
         }
@@ -193,7 +195,11 @@ public abstract class AbstractConnector implements Connector {
             }
         }
 
-        for (final ControllerServiceFacade service : group.getControllerServices()) {
+        final Set<ControllerServiceFacade> referencedServices = group.getControllerServices(
+            ControllerServiceReferenceScope.INCLUDE_REFERENCED_SERVICES_ONLY,
+            ControllerServiceReferenceHierarchy.DIRECT_SERVICES_ONLY);
+
+        for (final ControllerServiceFacade service : referencedServices) {
             final Map<String, String> properties = service.getDefinition().getProperties();
             final List<ValidationResult> serviceResults = service.validate(properties);
             for (final ValidationResult result : serviceResults) {
