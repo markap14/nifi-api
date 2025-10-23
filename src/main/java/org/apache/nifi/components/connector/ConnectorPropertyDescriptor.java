@@ -52,6 +52,7 @@ public final class ConnectorPropertyDescriptor {
     private final boolean required;
     private final PropertyType type;
     private final List<DescribedValue> allowableValues;
+    private final boolean allowableValuesFetchable;
     private final List<Validator> validators;
     private final Set<ConnectorPropertyDependency> dependencies;
 
@@ -62,6 +63,7 @@ public final class ConnectorPropertyDescriptor {
         this.required = builder.required;
         this.type = builder.type;
         this.allowableValues = builder.allowableValues == null ? null : Collections.unmodifiableList(builder.allowableValues);
+        this.allowableValuesFetchable = builder.allowableValuesFetchable;
         this.validators = List.copyOf(builder.validators);
         this.dependencies = Collections.unmodifiableSet(builder.dependencies);
     }
@@ -88,6 +90,10 @@ public final class ConnectorPropertyDescriptor {
 
     public List<DescribedValue> getAllowableValues() {
         return allowableValues;
+    }
+
+    public boolean isAllowableValuesFetchable() {
+        return allowableValuesFetchable;
     }
 
     public Set<ConnectorPropertyDependency> getDependencies() {
@@ -191,6 +197,7 @@ public final class ConnectorPropertyDescriptor {
         private boolean required = false;
         private PropertyType type = PropertyType.STRING;
         private List<DescribedValue> allowableValues = null;
+        private boolean allowableValuesFetchable = false;
         private final List<Validator> validators = new ArrayList<>();
         private final Set<ConnectorPropertyDependency> dependencies = new HashSet<>();
 
@@ -201,6 +208,7 @@ public final class ConnectorPropertyDescriptor {
             this.required = other.required;
             this.type = other.type;
             this.allowableValues = other.allowableValues == null ? null : new ArrayList<>(other.allowableValues);
+            this.allowableValuesFetchable = other.allowableValuesFetchable;
             this.validators.clear();
             this.validators.addAll(other.validators);
             this.dependencies.clear();
@@ -234,6 +242,11 @@ public final class ConnectorPropertyDescriptor {
 
         public Builder type(final PropertyType type) {
             this.type = type;
+            return this;
+        }
+
+        public Builder allowableValuesFetchable(final boolean fetchable) {
+            this.allowableValuesFetchable = fetchable;
             return this;
         }
 
@@ -387,6 +400,13 @@ public final class ConnectorPropertyDescriptor {
         }
 
         public ConnectorPropertyDescriptor build() {
+            if (name == null || name.isEmpty()) {
+                throw new IllegalStateException("Property name must be specified");
+            }
+            if (allowableValues != null && allowableValuesFetchable) {
+                throw new IllegalStateException("Property cannot have both fetchable allowable values and a static list of allowable values");
+            }
+
             return new ConnectorPropertyDescriptor(this);
         }
     }

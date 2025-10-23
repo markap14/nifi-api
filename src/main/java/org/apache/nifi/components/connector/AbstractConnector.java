@@ -17,6 +17,8 @@
 
 package org.apache.nifi.components.connector;
 
+import org.apache.nifi.components.AllowableValue;
+import org.apache.nifi.components.DescribedValue;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.components.ConnectionFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceReferenceScope;
@@ -38,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -47,6 +50,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public abstract class AbstractConnector implements Connector {
+    private final Map<PropertyKey, List<AllowableValue>> cachedAllowableValues = new ConcurrentHashMap<>();
+
     private volatile ConnectorInitializationContext initializationContext;
     private volatile ComponentLog logger;
 
@@ -364,8 +369,8 @@ public abstract class AbstractConnector implements Connector {
                 final List<ConnectorPropertyDescriptor> descriptors = propertyGroup.getProperties();
                 final Map<String, ConnectorPropertyDescriptor> descriptorMap = descriptors.stream()
                     .collect(Collectors.toMap(ConnectorPropertyDescriptor::getName, Function.identity()));
-                final Function<String, ConnectorPropertyValue> propertyValueLookup =
-                    name -> context.getProperty(configurationStep.getName(), name);
+
+                final Function<String, ConnectorPropertyValue> propertyValueLookup = name -> context.getProperty(configurationStep.getName(), name);
 
                 for (final ConnectorPropertyDescriptor descriptor : descriptors) {
                     final boolean dependencySatisfied = isDependencySatisfied(descriptor, descriptorMap::get, propertyValueLookup);
@@ -394,6 +399,52 @@ public abstract class AbstractConnector implements Connector {
                     if (!result.isValid()) {
                         results.add(result);
                     }
+
+                    final List<DescribedValue> allowableValues = descriptor.getAllowableValues();
+                    if (!isValueAllowed(propertyValue.getValue(), allowableValues)) {
+                        final ValidationResult invalidResult = new ValidationResult.Builder()
+                            .valid(false)
+                            .input(propertyValue.getValue())
+                            .subject(descriptor.getName())
+                            .explanation("Value is not one of the allowable values")
+                            .build();
+
+                        results.add(invalidResult);
+                    }
+
+                    final boolean allowableValuesFetchable = descriptor.isAllowableValuesFetchable();
+                    if (allowableValuesFetchable) {
+                        final PropertyKey key = new PropertyKey(configurationStep.getName(), propertyGroup.getName(), descriptor.getName());
+                        List<AllowableValue> fetchedAllowableValues = cachedAllowableValues.get(key);
+                        if (fetchedAllowableValues == null) {
+                            try {
+                                fetchedAllowableValues = fetchAllowableValues(configurationStep.getName(), propertyGroup.getName(), descriptor.getName());
+                            } catch (final Exception e) {
+                                getLogger().error("Failed to validate property {} due to failure fetching allowable values", descriptor.getName(), e);
+
+                                final ValidationResult invalidResult = new ValidationResult.Builder()
+                                    .valid(false)
+                                    .input(propertyValue.getValue())
+                                    .subject(descriptor.getName())
+                                    .explanation("Failed to fetch allowable values: " + e.getMessage())
+                                    .build();
+
+                                results.add(invalidResult);
+                                continue;
+                            }
+                        }
+
+                        if (!isValueAllowed(propertyValue.getValue(), allowableValues)) {
+                            final ValidationResult invalidResult = new ValidationResult.Builder()
+                                .valid(false)
+                                .input(propertyValue.getValue())
+                                .subject(descriptor.getName())
+                                .explanation("Value is not one of the allowable values")
+                                .build();
+
+                            results.add(invalidResult);
+                        }
+                    }
                 }
             }
         }
@@ -402,7 +453,7 @@ public abstract class AbstractConnector implements Connector {
         // if values are null or invalid so that they can focus only on the interaction between the properties, etc.
         if (results.isEmpty()) {
             final Collection<ValidationResult> customResults = customValidate(context);
-            if (null != customResults) {
+            if (customResults != null) {
                 for (final ValidationResult result : customResults) {
                     if (!result.isValid()) {
                         results.add(result);
@@ -412,6 +463,24 @@ public abstract class AbstractConnector implements Connector {
         }
 
         return results;
+    }
+
+    private boolean isValueAllowed(final String value, final List<DescribedValue> allowableValues) {
+        if (value == null) {
+            return false;
+        }
+        if (allowableValues == null || allowableValues.isEmpty()) {
+            // If no allowable values are explicitly specified, consider all values to be allowable
+            return true;
+        }
+
+        for (final DescribedValue describedValue : allowableValues) {
+            if (value.equalsIgnoreCase(describedValue.getValue())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private boolean isDependencySatisfied(final ConnectorPropertyDescriptor propertyDescriptor, final Function<String, ConnectorPropertyDescriptor> propertyDescriptorLookup,
@@ -469,6 +538,39 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
+    @Override
+    public final void onConfigurationStepConfigured(final String stepName) throws FlowUpdateException {
+        onStepConfigured(stepName);
+        cachedAllowableValues.clear();
+    }
+
+    protected abstract void onStepConfigured(final String stepName) throws FlowUpdateException;
+
+    @Override
+    public final List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName) {
+        final List<AllowableValue> allowableValues = fetchAllAllowableValues(stepName, groupName, propertyName);
+        final PropertyKey key = new PropertyKey(stepName, groupName, propertyName);
+        cachedAllowableValues.put(key, allowableValues);
+        return allowableValues;
+    }
+
+    protected List<AllowableValue> fetchAllAllowableValues(final String stepName, final String groupName, final String propertyName) {
+        throw new UnsupportedOperationException("Property %s of Property Group %s in Configuration Step %s does not support fetching Allowable Values.".formatted(propertyName, groupName, stepName));
+    }
+
+    @Override
+    public List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName, final String filter) {
+        final List<AllowableValue> allowableValues = fetchAllowableValues(stepName, groupName, propertyName);
+        if (filter == null || filter.isEmpty()) {
+            return allowableValues;
+        } else {
+            return allowableValues.stream()
+                .filter(value -> value.getValue().toLowerCase().contains(filter.toLowerCase()) || value.getValue().toUpperCase().contains(filter.toUpperCase()))
+                .toList();
+        }
+    }
+
+
     /**
      * No-op implementation that allows concrete subclasses to perform validation of property configuration
      *
@@ -477,5 +579,8 @@ public abstract class AbstractConnector implements Connector {
      */
     protected Collection<ValidationResult> customValidate(final ConnectorConfigurationContext context) {
         return Collections.emptyList();
+    }
+
+    protected record PropertyKey(String stepName, String groupName, String propertyName) {
     }
 }

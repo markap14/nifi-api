@@ -17,6 +17,7 @@
 
 package org.apache.nifi.components.connector;
 
+import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ValidationResult;
 
@@ -111,4 +112,7 @@ public interface Connector {
 
     List<ValidationResult> validate(ConnectorConfigurationContext context);
 
+    List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName);
+
+    List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName, String filter);
 }
