@@ -55,6 +55,9 @@ public abstract class AbstractConnector implements Connector {
     private volatile ConnectorInitializationContext initializationContext;
     private volatile ComponentLog logger;
 
+    protected abstract void onStepConfigured(final String stepName) throws FlowUpdateException;
+
+
     @Override
     public final void initialize(final ConnectorInitializationContext context) {
         this.initializationContext = context;
@@ -544,7 +547,13 @@ public abstract class AbstractConnector implements Connector {
         cachedAllowableValues.clear();
     }
 
-    protected abstract void onStepConfigured(final String stepName) throws FlowUpdateException;
+    @Override
+    public void abortUpdatePreparation(final Throwable throwable) {
+    }
+
+    @Override
+    public void finishUpdate() {
+    }
 
     @Override
     public final List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName) {
