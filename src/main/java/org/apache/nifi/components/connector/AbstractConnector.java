@@ -552,7 +552,7 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void finishUpdate() {
+    public void finishUpdate() throws FlowUpdateException {
     }
 
     @Override
