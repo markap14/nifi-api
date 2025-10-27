@@ -187,8 +187,7 @@ public abstract class AbstractConnector implements Connector {
 
     private void validate(final ProcessGroupFacade group, final List<ValidationResult> validationResults) {
         for (final ProcessorFacade processor : group.getProcessors()) {
-            final Map<String, String> properties = processor.getDefinition().getProperties();
-            final List<ValidationResult> processorResults = processor.validate(properties);
+            final List<ValidationResult> processorResults = processor.validate();
             for (final ValidationResult result : processorResults) {
                 if (result.isValid()) {
                     continue;
@@ -208,8 +207,7 @@ public abstract class AbstractConnector implements Connector {
             ControllerServiceReferenceHierarchy.DIRECT_SERVICES_ONLY);
 
         for (final ControllerServiceFacade service : referencedServices) {
-            final Map<String, String> properties = service.getDefinition().getProperties();
-            final List<ValidationResult> serviceResults = service.validate(properties);
+            final List<ValidationResult> serviceResults = service.validate();
             for (final ValidationResult result : serviceResults) {
                 if (result.isValid()) {
                     continue;

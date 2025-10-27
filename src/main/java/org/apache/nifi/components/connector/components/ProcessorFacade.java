@@ -33,6 +33,8 @@ public interface ProcessorFacade {
 
     ProcessorLifecycle getLifecycle();
 
+    List<ValidationResult> validate();
+
     List<ValidationResult> validate(Map<String, String> propertyValues);
 
     List<ConfigVerificationResult> verify(Map<String, String> propertyValues, Map<String, String> attributes);
