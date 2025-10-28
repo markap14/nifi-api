@@ -17,14 +17,14 @@
 
 package org.apache.nifi.components.connector.components;
 
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 public interface StatelessGroupLifecycle {
 
-    Future<Void> start();
+    CompletableFuture<Void> start();
 
-    Future<Void> stop();
+    CompletableFuture<Void> stop();
 
-    Future<Void> terminate();
+    CompletableFuture<Void> terminate();
 
 }

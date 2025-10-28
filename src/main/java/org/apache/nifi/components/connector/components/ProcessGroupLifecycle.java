@@ -32,6 +32,10 @@ public interface ProcessGroupLifecycle {
 
     CompletableFuture<Void> startProcessors();
 
+    CompletableFuture<Void> start(ControllerServiceReferenceScope serviceReferenceScope);
+
+    CompletableFuture<Void> stop();
+
     CompletableFuture<Void> stopProcessors();
 
 }
