@@ -21,7 +21,6 @@ import org.apache.nifi.components.connector.components.ParameterContextFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.flow.Bundle;
 import org.apache.nifi.flow.VersionedExternalFlow;
-import org.apache.nifi.flow.VersionedProcessGroup;
 import org.apache.nifi.logging.ComponentLog;
 
 /**
@@ -80,7 +79,7 @@ public interface ConnectorInitializationContext {
 
     /**
      * <p>
-     *   Updates the Connector's flow to the given VersionedProcessGroup. This may be a long-running process, as it involves
+     *   Updates the Connector's flow to the given VersionedExternalFlow. This may be a long-running process, as it involves
      *   several steps, to include:
      * </p>
      * <ul>
@@ -102,10 +101,8 @@ public interface ConnectorInitializationContext {
      *   be started.
      * </p>
      *
-     * @param updatedRootGroup the new representation of the root process group for the Connector
+     * @param versionedExternalFlow the new representation of the flow
      */
-    void updateFlow(VersionedProcessGroup updatedRootGroup) throws FlowUpdateException;
-
     void updateFlow(VersionedExternalFlow versionedExternalFlow) throws FlowUpdateException;
 
     /**
