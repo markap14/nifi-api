@@ -19,7 +19,7 @@ package org.apache.nifi.components.connector;
 
 import java.util.Map;
 
-public interface ConnectorConfigurationContext {
+public interface ConnectorConfigurationContext extends Cloneable {
 
     ConnectorPropertyValue getProperty(String configurationStepName, String propertyName);
 
@@ -32,4 +32,6 @@ public interface ConnectorConfigurationContext {
      * @return a new ConnectorConfigurationContext with the overrides applied
      */
     ConnectorConfigurationContext createWithOverrides(String stepName, Map<String, String> propertyOverrides);
+
+    ConnectorConfigurationContext clone();
 }

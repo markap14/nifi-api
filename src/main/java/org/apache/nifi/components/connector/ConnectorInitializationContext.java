@@ -17,8 +17,7 @@
 
 package org.apache.nifi.components.connector;
 
-import org.apache.nifi.components.connector.components.ParameterContextFacade;
-import org.apache.nifi.components.connector.components.ProcessGroupFacade;
+import org.apache.nifi.components.connector.components.FlowContext;
 import org.apache.nifi.flow.Bundle;
 import org.apache.nifi.flow.VersionedExternalFlow;
 import org.apache.nifi.logging.ComponentLog;
@@ -54,28 +53,14 @@ public interface ConnectorInitializationContext {
     ComponentLog getLogger();
 
     /**
-     * Returns the ProcessGroupFacade representing the root process group of the Connector.
-     * @return the root ProcessGroupFacade
-     */
-    ProcessGroupFacade getRootGroup();
-
-    /**
      * Returns the SecretsManager that can be used for retrieving Secrets from an external secrets provider.
      * @return the SecretsManager
      */
     SecretsManager getSecretsManager();
 
-    /**
-     * Returns the ConnectorConfigurationContext that can be used for retrieving configured property values.
-     * @return the ConnectorConfigurationContext
-     */
-    ConnectorConfigurationContext getConfigurationContext();
+    FlowContext getWorkingFlowContext();
 
-    /**
-     * Returns the ParameterContextFacade that allows reading and management of Parameter values and assets.
-     * @return the ParameterContextFacade
-     */
-    ParameterContextFacade getParameterContext();
+    FlowContext getActiveFlowContext();
 
     /**
      * <p>

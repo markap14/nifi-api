@@ -21,9 +21,9 @@ import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.DescribedValue;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.components.ConnectionFacade;
-import org.apache.nifi.components.connector.components.ControllerServiceReferenceScope;
 import org.apache.nifi.components.connector.components.ControllerServiceFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceReferenceHierarchy;
+import org.apache.nifi.components.connector.components.ControllerServiceReferenceScope;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupLifecycle;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
@@ -90,7 +90,7 @@ public abstract class AbstractConnector implements Connector {
 
     @Override
     public void start() throws FlowUpdateException {
-        final ProcessGroupLifecycle lifecycle = getInitializationContext().getRootGroup().getLifecycle();
+        final ProcessGroupLifecycle lifecycle = getInitializationContext().getActiveFlowContext().getRootGroup().getLifecycle();
 
         try {
             lifecycle.enableControllerServices(ControllerServiceReferenceScope.INCLUDE_REFERENCED_SERVICES_ONLY, ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS).get();
@@ -103,7 +103,7 @@ public abstract class AbstractConnector implements Connector {
 
     @Override
     public void stop() throws FlowUpdateException {
-        final ProcessGroupFacade rootGroup = getInitializationContext().getRootGroup();
+        final ProcessGroupFacade rootGroup = getInitializationContext().getActiveFlowContext().getRootGroup();
         final ProcessGroupLifecycle lifecycle = rootGroup.getLifecycle();
         try {
             lifecycle.stopProcessors().get(1, TimeUnit.MINUTES);
@@ -157,7 +157,7 @@ public abstract class AbstractConnector implements Connector {
             throw new FlowUpdateException(e);
         }
 
-        while (!isGroupDrained(getInitializationContext().getRootGroup())) {
+        while (!isGroupDrained(getInitializationContext().getActiveFlowContext().getRootGroup())) {
             try {
                 Thread.sleep(1000);
             } catch (final InterruptedException e) {
@@ -181,7 +181,7 @@ public abstract class AbstractConnector implements Connector {
     @Override
     public List<ValidationResult> validate() {
         final List<ValidationResult> validationResults = new ArrayList<>();
-        validate(getInitializationContext().getRootGroup(), validationResults);
+        validate(getInitializationContext().getActiveFlowContext().getRootGroup(), validationResults);
         return validationResults;
     }
 
@@ -232,7 +232,7 @@ public abstract class AbstractConnector implements Connector {
     }
 
     protected void stopSourceProcessors() throws InterruptedException, FlowUpdateException {
-        final List<ProcessorFacade> sourceProcessors = getSourceProcessors();
+        final List<ProcessorFacade> sourceProcessors = getSourceProcessors(getInitializationContext().getActiveFlowContext().getRootGroup());
 
         final List<CompletableFuture<Void>> stopFutures = new ArrayList<>();
         for (final ProcessorFacade sourceProcessor : sourceProcessors) {
@@ -251,7 +251,7 @@ public abstract class AbstractConnector implements Connector {
     }
 
     protected void startNonSourceProcessors() throws InterruptedException, FlowUpdateException {
-        final List<ProcessorFacade> nonSourceProcessors = getNonSourceProcessors();
+        final List<ProcessorFacade> nonSourceProcessors = getNonSourceProcessors(getInitializationContext().getActiveFlowContext().getRootGroup());
 
         final List<CompletableFuture<Void>> startFutures = new ArrayList<>();
         for (final ProcessorFacade nonSourceProcessor : nonSourceProcessors) {
@@ -284,15 +284,13 @@ public abstract class AbstractConnector implements Connector {
         });
     }
 
-    protected List<ProcessorFacade> getSourceProcessors() {
-        final ProcessGroupFacade group = getInitializationContext().getRootGroup();
+    protected List<ProcessorFacade> getSourceProcessors(final ProcessGroupFacade group) {
         final Set<String> nonSourceIds = getNonSourceProcessorIds(group);
 
         return findProcessors(group, processor -> !nonSourceIds.contains(processor.getDefinition().getIdentifier()));
     }
 
-    protected List<ProcessorFacade> getNonSourceProcessors() {
-        final ProcessGroupFacade group = getInitializationContext().getRootGroup();
+    protected List<ProcessorFacade> getNonSourceProcessors(final ProcessGroupFacade group) {
         final Set<String> nonSourceIds = getNonSourceProcessorIds(group);
 
         return findProcessors(group, processor -> nonSourceIds.contains(processor.getDefinition().getIdentifier()));
@@ -340,23 +338,6 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
-    protected ConnectorPropertyValue getProperty(final String configurationStepName, final String propertyName) {
-        final ConnectorConfigurationContext configurationContext = getInitializationContext().getConfigurationContext();
-        if (configurationContext == null) {
-            return EmptyPropertyValue.INSTANCE;
-        }
-
-        return configurationContext.getProperty(configurationStepName, propertyName);
-    }
-
-    protected ConnectorPropertyValue getProperty(final ConfigurationStep configurationStep, final ConnectorPropertyDescriptor propertyDescriptor) {
-        final ConnectorConfigurationContext configurationContext = getInitializationContext().getConfigurationContext();
-        if (configurationContext == null) {
-            return EmptyPropertyValue.INSTANCE;
-        }
-
-        return configurationContext.getProperty(configurationStep, propertyDescriptor);
-    }
 
     @Override
     public List<ValidationResult> validate(final ConnectorConfigurationContext context) {
