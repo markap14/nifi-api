@@ -24,11 +24,18 @@ import org.apache.nifi.components.PropertyValue;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
+import org.apache.nifi.components.resource.ResourceReference;
+import org.apache.nifi.components.resource.ResourceReferences;
 import org.apache.nifi.controller.ControllerService;
 import org.apache.nifi.controller.ControllerServiceLookup;
 import org.apache.nifi.documentation.init.EmptyControllerServiceLookup;
+import org.apache.nifi.expression.AttributeValueDecorator;
 import org.apache.nifi.expression.ExpressionLanguageCompiler;
+import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.processor.DataUnit;
+import org.apache.nifi.processor.exception.ProcessException;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -38,6 +45,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -154,6 +162,7 @@ public final class ConnectorPropertyDescriptor {
             return invalidResult;
         }
 
+        // FIXME: The ValidationContext needs to be in the framework not the API so that we can use FormatUtils, DataUnit, etc.
         final ValidationContext validationContext = new ConnectorValidationContext(name, value);
         for (final Validator validator : validators) {
             final ValidationResult result = validator.validate(name, value, validationContext);
@@ -499,6 +508,141 @@ public final class ConnectorPropertyDescriptor {
         @Override
         public Map<String, String> getAllProperties() {
             return Map.of(propertyName, propertyValue);
+        }
+    }
+
+    private static class PropertyValueShim implements PropertyValue {
+        private final String value;
+
+        public PropertyValueShim(final String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String getValue() {
+            return value;
+        }
+
+        @Override
+        public Integer asInteger() {
+            return Integer.parseInt(value);
+        }
+
+        @Override
+        public Long asLong() {
+            return Long.parseLong(value);
+        }
+
+        @Override
+        public Boolean asBoolean() {
+            return Boolean.parseBoolean(value);
+        }
+
+        @Override
+        public Float asFloat() {
+            return Float.parseFloat(value);
+        }
+
+        @Override
+        public Double asDouble() {
+            return Double.parseDouble(value);
+        }
+
+        @Override
+        public Long asTimePeriod(final TimeUnit timeUnit) {
+
+            return 0L;
+        }
+
+        @Override
+        public Duration asDuration() {
+            return null;
+        }
+
+        @Override
+        public Double asDataSize(final DataUnit dataUnit) {
+            return 0.0;
+        }
+
+        @Override
+        public ControllerService asControllerService() {
+            return null;
+        }
+
+        @Override
+        public <T extends ControllerService> T asControllerService(final Class<T> serviceType) throws IllegalArgumentException {
+            return null;
+        }
+
+        @Override
+        public ResourceReference asResource() {
+            return null;
+        }
+
+        @Override
+        public ResourceReferences asResources() {
+            return null;
+        }
+
+        @Override
+        public <E extends Enum<E>> E asAllowableValue(final Class<E> enumType) throws IllegalArgumentException {
+            return null;
+        }
+
+        @Override
+        public boolean isSet() {
+            return false;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions() throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final Map<String, String> attributes) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final Map<String, String> attributes, final AttributeValueDecorator decorator) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final Map<String, String> additionalAttributes) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final Map<String, String> additionalAttributes, final AttributeValueDecorator decorator) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final Map<String, String> additionalAttributes, final AttributeValueDecorator decorator,
+                    final Map<String, String> stateValues) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final AttributeValueDecorator decorator) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final AttributeValueDecorator decorator) throws ProcessException {
+            return null;
+        }
+
+        @Override
+        public boolean isExpressionLanguagePresent() {
+            return false;
         }
     }
 }

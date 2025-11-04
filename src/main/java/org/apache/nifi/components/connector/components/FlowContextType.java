@@ -17,16 +17,9 @@
 
 package org.apache.nifi.components.connector.components;
 
-import org.apache.nifi.components.connector.ConnectorConfigurationContext;
+public enum FlowContextType {
 
-public interface FlowContext {
+    ACTIVE,
 
-    ProcessGroupFacade getRootGroup();
-
-    ParameterContextFacade getParameterContext();
-
-    ConnectorConfigurationContext getConfigurationContext();
-
-    FlowContextType getType();
-
+    WORKING;
 }

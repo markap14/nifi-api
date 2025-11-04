@@ -24,6 +24,7 @@ import org.apache.nifi.components.connector.components.ConnectionFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceReferenceHierarchy;
 import org.apache.nifi.components.connector.components.ControllerServiceReferenceScope;
+import org.apache.nifi.components.connector.components.FlowContext;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupLifecycle;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
@@ -55,16 +56,16 @@ public abstract class AbstractConnector implements Connector {
     private volatile ConnectorInitializationContext initializationContext;
     private volatile ComponentLog logger;
 
-    protected abstract void onStepConfigured(final String stepName) throws FlowUpdateException;
+    protected abstract void onStepConfigured(final String stepName, final FlowContext workingContext) throws FlowUpdateException;
 
 
     @Override
-    public final void initialize(final ConnectorInitializationContext context) {
+    public final void initialize(final ConnectorInitializationContext context, final FlowContext activeFlowContext) {
         this.initializationContext = context;
         this.logger = context.getLogger();
 
         try {
-            init();
+            init(activeFlowContext);
         } catch (final FlowUpdateException e) {
             throw new RuntimeException("Failed to initialize Connector", e);
         }
@@ -72,8 +73,11 @@ public abstract class AbstractConnector implements Connector {
 
     /**
      * No-op method for subclasses to override to perform any initialization logic
+     *
+     * @param activeFlowContext the flow context that represents the active flow
+     * @throws FlowUpdateException if there is an error during initialization
      */
-    protected void init() throws FlowUpdateException {
+    protected void init(final FlowContext activeFlowContext) throws FlowUpdateException {
     }
 
     protected final ComponentLog getLogger() {
@@ -89,8 +93,8 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void start() throws FlowUpdateException {
-        final ProcessGroupLifecycle lifecycle = getInitializationContext().getActiveFlowContext().getRootGroup().getLifecycle();
+    public void start(final FlowContext context) throws FlowUpdateException {
+        final ProcessGroupLifecycle lifecycle = context.getRootGroup().getLifecycle();
 
         try {
             lifecycle.enableControllerServices(ControllerServiceReferenceScope.INCLUDE_REFERENCED_SERVICES_ONLY, ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS).get();
@@ -102,8 +106,8 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void stop() throws FlowUpdateException {
-        final ProcessGroupFacade rootGroup = getInitializationContext().getActiveFlowContext().getRootGroup();
+    public void stop(final FlowContext context) throws FlowUpdateException {
+        final ProcessGroupFacade rootGroup = context.getRootGroup();
         final ProcessGroupLifecycle lifecycle = rootGroup.getLifecycle();
         try {
             lifecycle.stopProcessors().get(1, TimeUnit.MINUTES);
@@ -127,25 +131,26 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void prepareForUpdate() throws FlowUpdateException {
-        stop();
+    public void prepareForUpdate(final FlowContext workingContext, final FlowContext activeContext) throws FlowUpdateException {
+        stop(activeContext);
     }
 
     /**
      * Drains all FlowFiles from the Connector instance.
      *
+     * @param flowContext the FlowContext to use for drainage
      * @throws FlowUpdateException if there is an error draining the FlowFiles
      */
-    protected void drainFlowFiles() throws FlowUpdateException {
+    protected void drainFlowFiles(final FlowContext flowContext) throws FlowUpdateException {
         try {
-            stopSourceProcessors();
+            stopSourceProcessors(flowContext);
         } catch (final InterruptedException ie) {
             Thread.currentThread().interrupt();
             throw new FlowUpdateException(ie);
         }
 
         try {
-            startNonSourceProcessors();
+            startNonSourceProcessors(flowContext);
         } catch (final InterruptedException ie) {
             Thread.currentThread().interrupt();
             throw new FlowUpdateException(ie);
@@ -157,7 +162,7 @@ public abstract class AbstractConnector implements Connector {
             throw new FlowUpdateException(e);
         }
 
-        while (!isGroupDrained(getInitializationContext().getActiveFlowContext().getRootGroup())) {
+        while (!isGroupDrained(flowContext.getRootGroup())) {
             try {
                 Thread.sleep(1000);
             } catch (final InterruptedException e) {
@@ -179,13 +184,25 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public List<ValidationResult> validate() {
+    public List<ValidationResult> validate(final FlowContext context) {
         final List<ValidationResult> validationResults = new ArrayList<>();
-        validate(getInitializationContext().getActiveFlowContext().getRootGroup(), validationResults);
+        validate(context, context.getRootGroup(), validationResults);
         return validationResults;
     }
 
-    private void validate(final ProcessGroupFacade group, final List<ValidationResult> validationResults) {
+    private void validate(final FlowContext context, final ProcessGroupFacade group, final List<ValidationResult> validationResults) {
+        final List<ValidationResult> connectorPropertiesResults = validate(context, context.getConfigurationContext());
+        if (!connectorPropertiesResults.isEmpty()) {
+            connectorPropertiesResults.stream()
+                .filter(result -> !result.isValid())
+                .forEach(validationResults::add);
+
+            // If any invalid results on the connector configuration itself, do not proceed with further validation of components
+            if (!validationResults.isEmpty()) {
+                return;
+            }
+        }
+
         for (final ProcessorFacade processor : group.getProcessors()) {
             final List<ValidationResult> processorResults = processor.validate();
             for (final ValidationResult result : processorResults) {
@@ -223,7 +240,7 @@ public abstract class AbstractConnector implements Connector {
         }
 
         for (final ProcessGroupFacade childGroup : group.getProcessGroups()) {
-            validate(childGroup, validationResults);
+            validate(context, childGroup, validationResults);
         }
     }
 
@@ -231,8 +248,8 @@ public abstract class AbstractConnector implements Connector {
         return group.getQueueSize().getObjectCount() == 0;
     }
 
-    protected void stopSourceProcessors() throws InterruptedException, FlowUpdateException {
-        final List<ProcessorFacade> sourceProcessors = getSourceProcessors(getInitializationContext().getActiveFlowContext().getRootGroup());
+    protected void stopSourceProcessors(final FlowContext context) throws InterruptedException, FlowUpdateException {
+        final List<ProcessorFacade> sourceProcessors = getSourceProcessors(context.getRootGroup());
 
         final List<CompletableFuture<Void>> stopFutures = new ArrayList<>();
         for (final ProcessorFacade sourceProcessor : sourceProcessors) {
@@ -250,8 +267,8 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
-    protected void startNonSourceProcessors() throws InterruptedException, FlowUpdateException {
-        final List<ProcessorFacade> nonSourceProcessors = getNonSourceProcessors(getInitializationContext().getActiveFlowContext().getRootGroup());
+    protected void startNonSourceProcessors(final FlowContext flowContext) throws InterruptedException, FlowUpdateException {
+        final List<ProcessorFacade> nonSourceProcessors = getNonSourceProcessors(flowContext.getRootGroup());
 
         final List<CompletableFuture<Void>> startFutures = new ArrayList<>();
         for (final ProcessorFacade nonSourceProcessor : nonSourceProcessors) {
@@ -340,9 +357,9 @@ public abstract class AbstractConnector implements Connector {
 
 
     @Override
-    public List<ValidationResult> validate(final ConnectorConfigurationContext context) {
+    public List<ValidationResult> validate(final FlowContext workingContext, final ConnectorConfigurationContext context) {
         final List<ValidationResult> results = new ArrayList<>();
-        final List<ConfigurationStep> configurationSteps = getConfigurationSteps();
+        final List<ConfigurationStep> configurationSteps = getConfigurationSteps(workingContext);
 
         for (final ConfigurationStep configurationStep : configurationSteps) {
             final List<ConnectorPropertyGroup> propertyGroups = configurationStep.getPropertyGroups();
@@ -363,7 +380,7 @@ public abstract class AbstractConnector implements Connector {
                     }
 
                     final ConnectorPropertyValue propertyValue = context.getProperty(configurationStep.getName(), descriptor.getName());
-                    if (propertyValue == null) {
+                    if (propertyValue == null || !propertyValue.isSet()) {
                         if (descriptor.isRequired()) {
                             final ValidationResult invalidResult = new ValidationResult.Builder()
                                 .valid(false)
@@ -400,7 +417,7 @@ public abstract class AbstractConnector implements Connector {
                         List<AllowableValue> fetchedAllowableValues = cachedAllowableValues.get(key);
                         if (fetchedAllowableValues == null) {
                             try {
-                                fetchedAllowableValues = fetchAllowableValues(configurationStep.getName(), propertyGroup.getName(), descriptor.getName());
+                                fetchedAllowableValues = fetchAllowableValues(configurationStep.getName(), propertyGroup.getName(), descriptor.getName(), workingContext);
                             } catch (final Exception e) {
                                 getLogger().error("Failed to validate property {} due to failure fetching allowable values", descriptor.getName(), e);
 
@@ -416,7 +433,7 @@ public abstract class AbstractConnector implements Connector {
                             }
                         }
 
-                        if (!isValueAllowed(propertyValue.getValue(), allowableValues)) {
+                        if (!isValueAllowed(propertyValue.getValue(), fetchedAllowableValues)) {
                             final ValidationResult invalidResult = new ValidationResult.Builder()
                                 .valid(false)
                                 .input(propertyValue.getValue())
@@ -447,13 +464,13 @@ public abstract class AbstractConnector implements Connector {
         return results;
     }
 
-    private boolean isValueAllowed(final String value, final List<DescribedValue> allowableValues) {
-        if (value == null) {
-            return false;
-        }
+    private boolean isValueAllowed(final String value, final List<? extends DescribedValue> allowableValues) {
         if (allowableValues == null || allowableValues.isEmpty()) {
             // If no allowable values are explicitly specified, consider all values to be allowable
             return true;
+        }
+        if (value == null) {
+            return false;
         }
 
         for (final DescribedValue describedValue : allowableValues) {
@@ -521,34 +538,30 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public final void onConfigurationStepConfigured(final String stepName) throws FlowUpdateException {
-        onStepConfigured(stepName);
+    public final void onConfigurationStepConfigured(final String stepName, final FlowContext workingContext) throws FlowUpdateException {
+        onStepConfigured(stepName, workingContext);
         cachedAllowableValues.clear();
     }
 
     @Override
-    public void abortUpdatePreparation(final Throwable throwable) {
+    public void abortUpdatePreparation(final FlowContext workingContext, final Throwable throwable) {
     }
 
     @Override
-    public void finishUpdate() throws FlowUpdateException {
-    }
-
-    @Override
-    public final List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName) {
-        final List<AllowableValue> allowableValues = fetchAllAllowableValues(stepName, groupName, propertyName);
+    public final List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName, final FlowContext flowContext) {
+        final List<AllowableValue> allowableValues = fetchAllAllowableValues(stepName, groupName, propertyName, flowContext);
         final PropertyKey key = new PropertyKey(stepName, groupName, propertyName);
         cachedAllowableValues.put(key, allowableValues);
         return allowableValues;
     }
 
-    protected List<AllowableValue> fetchAllAllowableValues(final String stepName, final String groupName, final String propertyName) {
+    protected List<AllowableValue> fetchAllAllowableValues(final String stepName, final String groupName, final String propertyName, final FlowContext flowContext) {
         throw new UnsupportedOperationException("Property %s of Property Group %s in Configuration Step %s does not support fetching Allowable Values.".formatted(propertyName, groupName, stepName));
     }
 
     @Override
-    public List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName, final String filter) {
-        final List<AllowableValue> allowableValues = fetchAllowableValues(stepName, groupName, propertyName);
+    public List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName, final FlowContext flowContext, final String filter) {
+        final List<AllowableValue> allowableValues = fetchAllowableValues(stepName, groupName, propertyName, flowContext);
         if (filter == null || filter.isEmpty()) {
             return allowableValues;
         } else {

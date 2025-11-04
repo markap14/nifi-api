@@ -20,6 +20,7 @@ package org.apache.nifi.components.connector;
 import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ValidationResult;
+import org.apache.nifi.components.connector.components.FlowContext;
 
 import java.util.List;
 import java.util.Map;
@@ -48,20 +49,25 @@ public interface Connector {
     /**
      * Initializes the Connector instance, providing it the necessary context that it needs to operate.
      * @param context the context for initialization
+     * @param activeFlowContext the flow context that represents the active flow
      */
-    void initialize(ConnectorInitializationContext context);
+    void initialize(ConnectorInitializationContext context, FlowContext activeFlowContext);
 
+    // FIXME: Consider adding two subclasses to FlowContext: ActiveFlowContext and WorkingFlowContext
+    //       They would have no methods, but would serve as markers to make it more clear which context is being used
     /**
      * Starts the Connector instance.
      * @throws FlowUpdateException if there is an error starting the Connector
+     * @param activeFlowContext the active flow context
      */
-    void start() throws FlowUpdateException;
+    void start(FlowContext activeFlowContext) throws FlowUpdateException;
 
     /**
      * Stops the Connector instance.
      * @throws FlowUpdateException if there is an error stopping the Connector
+     * @param activeFlowContext the active flow context
      */
-    void stop() throws FlowUpdateException;
+    void stop(FlowContext activeFlowContext) throws FlowUpdateException;
 
     /**
      * Validates that the Connector is valid according to its current configuration. Validity of a Connector may be
@@ -69,50 +75,63 @@ public interface Connector {
      * as ensuring that a Source Processor is able to connect to a remote system, or that a Sink Processor
      * is able to write to a remote system.
      *
+     * @param activeFlowContext the active flow context
      * @return a list of ValidationResults, each of which may indicate a check that was performed and any associated explanations
      * as to why the Connector is valid or invalid.
      */
-    List<ValidationResult> validate();
+    List<ValidationResult> validate(FlowContext activeFlowContext);
 
     /**
      * Returns the list of configuration steps that define the configuration of this Connector. Each step
      * represents a logical grouping of properties that should be configured together. The order of the steps
      * in the list represents the order in which the steps should be configured.
+     *
+     * @param flowContext the flow context that houses the configuration being used to drive the available configuration steps
      * @return the list of configuration steps
      */
-    List<ConfigurationStep> getConfigurationSteps();
+    List<ConfigurationStep> getConfigurationSteps(FlowContext flowContext);
 
     /**
      * Called whenever a specific configuration step has been configured. This allows the Connector to perform any necessary
      * actions specific to that step, such as updating parameter values, updating the flow, etc.
+     *
      * @param stepName the name of the step
+     * @param workingFlowContext the working flow context that is being used for the update
      */
-    void onConfigurationStepConfigured(String stepName) throws FlowUpdateException;
+    void onConfigurationStepConfigured(String stepName, FlowContext workingFlowContext) throws FlowUpdateException;
 
     /**
      * Called before any updates to the Connector's configuration are applied. This allows the Connector to perform any necessary
      * preparation work before the configuration is changed, such as stopping the flow, draining queues, etc.
+     *
+     * @param workingFlowContext the working flow context that has been created for the update
+     * @param activeFlowContext the active flow context that is currently in use
      */
-    void prepareForUpdate() throws FlowUpdateException;
+    void prepareForUpdate(FlowContext workingFlowContext, FlowContext activeFlowContext) throws FlowUpdateException;
 
     /**
-     * Called if the update preparation (i.e., {@link #prepareForUpdate()}) fails. This allows the Connector to perform any necessary
+     * Called if the update preparation (i.e., {@link #prepareForUpdate(FlowContext, FlowContext)}) fails. This allows the Connector to perform any necessary
      * cleanup work after a failed preparation, such as restarting the flow if it was stopped, etc.
+     *
+     * @param workingFlowContext the working flow context that was being used for the update preparation
      * @param cause the cause for the update preparation to be aborted
      */
-    void abortUpdatePreparation(Throwable cause);
+    void abortUpdatePreparation(FlowContext workingFlowContext, Throwable cause);
 
     /**
      * Called after all updates to the Connector's configuration have been applied. This allows the Connector to perform any necessary
      * work after the configuration has been changed, such as starting the flow, etc.
+     *
+     * @param workingFlowContext the working flow context that represents the updated configuration
+     * @param activeFlowContext the flow context that represents the active flow
      */
-    void finishUpdate() throws FlowUpdateException;
+    void finishUpdate(FlowContext workingFlowContext, FlowContext activeFlowContext) throws FlowUpdateException;
 
-    List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues);
+    List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues, FlowContext workingFlowContext);
 
-    List<ValidationResult> validate(ConnectorConfigurationContext context);
+    List<ValidationResult> validate(FlowContext workingFlowContext, ConnectorConfigurationContext context);
 
-    List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName);
+    List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName, FlowContext flowContext);
 
-    List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName, String filter);
+    List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName, FlowContext flowContext, String filter);
 }

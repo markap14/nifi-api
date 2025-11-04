@@ -58,10 +58,6 @@ public interface ConnectorInitializationContext {
      */
     SecretsManager getSecretsManager();
 
-    FlowContext getWorkingFlowContext();
-
-    FlowContext getActiveFlowContext();
-
     /**
      * <p>
      *   Updates the Connector's flow to the given VersionedExternalFlow. This may be a long-running process, as it involves
@@ -86,9 +82,10 @@ public interface ConnectorInitializationContext {
      *   be started.
      * </p>
      *
+     * @param flowContext the context of the flow to be updated
      * @param versionedExternalFlow the new representation of the flow
      */
-    void updateFlow(VersionedExternalFlow versionedExternalFlow) throws FlowUpdateException;
+    void updateFlow(FlowContext flowContext, VersionedExternalFlow versionedExternalFlow) throws FlowUpdateException;
 
     /**
      * The Bundle that the Connector was configured with. If this is not the current Bundle, it implies that the Connector
