@@ -19,33 +19,16 @@ package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.DescribedValue;
-import org.apache.nifi.components.PropertyDescriptor;
-import org.apache.nifi.components.PropertyValue;
-import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
-import org.apache.nifi.components.resource.ResourceReference;
-import org.apache.nifi.components.resource.ResourceReferences;
-import org.apache.nifi.controller.ControllerService;
-import org.apache.nifi.controller.ControllerServiceLookup;
-import org.apache.nifi.documentation.init.EmptyControllerServiceLookup;
-import org.apache.nifi.expression.AttributeValueDecorator;
-import org.apache.nifi.expression.ExpressionLanguageCompiler;
-import org.apache.nifi.flowfile.FlowFile;
-import org.apache.nifi.processor.DataUnit;
-import org.apache.nifi.processor.exception.ProcessException;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -112,9 +95,25 @@ public final class ConnectorPropertyDescriptor {
         return validators;
     }
 
-    public ValidationResult validate(final String value) {
+    public ValidationResult validate(final String stepName, final String groupName, final String value, final ConnectorValidationContext validationContext) {
+        final List<DescribedValue> fetchedAllowableValues;
+        if (isAllowableValuesFetchable()) {
+            try {
+                fetchedAllowableValues = validationContext.fetchAllowableValues(stepName, groupName, getName());
+            } catch (final Exception e) {
+                return new ValidationResult.Builder()
+                    .subject(name)
+                    .input(value)
+                    .valid(false)
+                    .explanation("Failed to fetch allowable values: " + e.getMessage())
+                    .build();
+            }
+        } else {
+            fetchedAllowableValues = null;
+        }
+
         if (type != PropertyType.STRING_LIST) {
-            return validateIndividual(value);
+            return validateIndividual(stepName, groupName, value, validationContext, fetchedAllowableValues);
         }
 
         if (required && value == null) {
@@ -128,7 +127,7 @@ public final class ConnectorPropertyDescriptor {
 
         final String[] values = value.split(",");
         for (final String individualValue : values) {
-            final ValidationResult result = validateIndividual(individualValue.trim());
+            final ValidationResult result = validateIndividual(stepName, groupName, individualValue.trim(), validationContext, fetchedAllowableValues);
             if (!result.isValid()) {
                 return result;
             }
@@ -141,20 +140,16 @@ public final class ConnectorPropertyDescriptor {
             .build();
     }
 
-    private ValidationResult validateIndividual(final String value) {
-        if (allowableValues != null && !allowableValues.isEmpty()) {
-            final boolean valueAllowed = allowableValues.stream()
-                .map(DescribedValue::getValue)
-                .anyMatch(val -> val.equals(value));
+    private ValidationResult validateIndividual(final String stepName, final String groupName, final String value,
+                final ConnectorValidationContext validationContext, final List<DescribedValue> fetchedAllowableValues) {
 
-            if (!valueAllowed) {
-                return new ValidationResult.Builder()
-                    .subject(name)
-                    .input(value)
-                    .valid(false)
-                    .explanation("Value is not one of the allowable values")
-                    .build();
-            }
+        if (!isValueAllowed(value, allowableValues) || !isValueAllowed(value, fetchedAllowableValues)) {
+            return new ValidationResult.Builder()
+                .subject(name)
+                .input(value)
+                .valid(false)
+                .explanation("Value is not one of the allowable values")
+                .build();
         }
 
         final ValidationResult invalidResult = validateType(value);
@@ -162,10 +157,8 @@ public final class ConnectorPropertyDescriptor {
             return invalidResult;
         }
 
-        // FIXME: The ValidationContext needs to be in the framework not the API so that we can use FormatUtils, DataUnit, etc.
-        final ValidationContext validationContext = new ConnectorValidationContext(name, value);
         for (final Validator validator : validators) {
-            final ValidationResult result = validator.validate(name, value, validationContext);
+            final ValidationResult result = validator.validate(name, value, validationContext.createValidationContext(stepName, groupName));
             if (!result.isValid()) {
                 return result;
             }
@@ -177,6 +170,25 @@ public final class ConnectorPropertyDescriptor {
             .valid(true)
             .build();
     }
+
+    private boolean isValueAllowed(final String value, final List<? extends DescribedValue> allowableValues) {
+        if (allowableValues == null || allowableValues.isEmpty()) {
+            // If no allowable values are explicitly specified, consider all values to be allowable
+            return true;
+        }
+        if (value == null) {
+            return false;
+        }
+
+        for (final DescribedValue describedValue : allowableValues) {
+            if (value.equalsIgnoreCase(describedValue.getValue())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 
     private ValidationResult validateType(final String value) {
         final String explanation = switch (type) {
@@ -417,232 +429,6 @@ public final class ConnectorPropertyDescriptor {
             }
 
             return new ConnectorPropertyDescriptor(this);
-        }
-    }
-
-    private static class ConnectorValidationContext implements ValidationContext {
-        private final ControllerServiceLookup controllerServiceLookup = new EmptyControllerServiceLookup();
-        private final String propertyName;
-        private final String propertyValue;
-
-        public ConnectorValidationContext(final String propertyName, final String propertyValue) {
-            this.propertyName = propertyName;
-            this.propertyValue = propertyValue;
-        }
-
-        @Override
-        public ControllerServiceLookup getControllerServiceLookup() {
-            return controllerServiceLookup;
-        }
-
-        @Override
-        public ValidationContext getControllerServiceValidationContext(final ControllerService controllerService) {
-            return null;
-        }
-
-        @Override
-        public ExpressionLanguageCompiler newExpressionLanguageCompiler() {
-            return null;
-        }
-
-        @Override
-        public PropertyValue newPropertyValue(final String value) {
-            return null;
-        }
-
-        @Override
-        public Map<PropertyDescriptor, String> getProperties() {
-            final PropertyDescriptor propertyDescriptor = new PropertyDescriptor.Builder()
-                .name(propertyName)
-                .addValidator(Validator.VALID)
-                .build();
-
-            return Map.of(propertyDescriptor, propertyValue);
-        }
-
-        @Override
-        public String getAnnotationData() {
-            return null;
-        }
-
-        @Override
-        public boolean isValidationRequired(final ControllerService service) {
-            return false;
-        }
-
-        @Override
-        public boolean isExpressionLanguagePresent(final String value) {
-            return false;
-        }
-
-        @Override
-        public boolean isExpressionLanguageSupported(final String propertyName) {
-            return false;
-        }
-
-        @Override
-        public String getProcessGroupIdentifier() {
-            return null;
-        }
-
-        @Override
-        public Collection<String> getReferencedParameters(final String propertyName) {
-            return Collections.emptyList();
-        }
-
-        @Override
-        public boolean isParameterDefined(final String parameterName) {
-            return false;
-        }
-
-        @Override
-        public boolean isParameterSet(final String parameterName) {
-            return false;
-        }
-
-        @Override
-        public PropertyValue getProperty(final PropertyDescriptor descriptor) {
-            return null;
-        }
-
-        @Override
-        public Map<String, String> getAllProperties() {
-            return Map.of(propertyName, propertyValue);
-        }
-    }
-
-    private static class PropertyValueShim implements PropertyValue {
-        private final String value;
-
-        public PropertyValueShim(final String value) {
-            this.value = value;
-        }
-
-        @Override
-        public String getValue() {
-            return value;
-        }
-
-        @Override
-        public Integer asInteger() {
-            return Integer.parseInt(value);
-        }
-
-        @Override
-        public Long asLong() {
-            return Long.parseLong(value);
-        }
-
-        @Override
-        public Boolean asBoolean() {
-            return Boolean.parseBoolean(value);
-        }
-
-        @Override
-        public Float asFloat() {
-            return Float.parseFloat(value);
-        }
-
-        @Override
-        public Double asDouble() {
-            return Double.parseDouble(value);
-        }
-
-        @Override
-        public Long asTimePeriod(final TimeUnit timeUnit) {
-
-            return 0L;
-        }
-
-        @Override
-        public Duration asDuration() {
-            return null;
-        }
-
-        @Override
-        public Double asDataSize(final DataUnit dataUnit) {
-            return 0.0;
-        }
-
-        @Override
-        public ControllerService asControllerService() {
-            return null;
-        }
-
-        @Override
-        public <T extends ControllerService> T asControllerService(final Class<T> serviceType) throws IllegalArgumentException {
-            return null;
-        }
-
-        @Override
-        public ResourceReference asResource() {
-            return null;
-        }
-
-        @Override
-        public ResourceReferences asResources() {
-            return null;
-        }
-
-        @Override
-        public <E extends Enum<E>> E asAllowableValue(final Class<E> enumType) throws IllegalArgumentException {
-            return null;
-        }
-
-        @Override
-        public boolean isSet() {
-            return false;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions() throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final Map<String, String> attributes) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final Map<String, String> attributes, final AttributeValueDecorator decorator) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final Map<String, String> additionalAttributes) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final Map<String, String> additionalAttributes, final AttributeValueDecorator decorator) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final Map<String, String> additionalAttributes, final AttributeValueDecorator decorator,
-                    final Map<String, String> stateValues) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final AttributeValueDecorator decorator) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final AttributeValueDecorator decorator) throws ProcessException {
-            return null;
-        }
-
-        @Override
-        public boolean isExpressionLanguagePresent() {
-            return false;
         }
     }
 }

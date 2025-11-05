@@ -17,5 +17,15 @@
 
 package org.apache.nifi.components.connector;
 
+import org.apache.nifi.components.DescribedValue;
+import org.apache.nifi.components.ValidationContext;
+
+import java.util.List;
+
 public interface ConnectorValidationContext {
+
+    ValidationContext createValidationContext(String stepName, String groupName);
+
+    List<DescribedValue> fetchAllowableValues(String stepName, String groupName, String propertyName);
+
 }

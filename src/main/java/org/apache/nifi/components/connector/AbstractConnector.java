@@ -18,7 +18,6 @@
 package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.AllowableValue;
-import org.apache.nifi.components.DescribedValue;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.components.ConnectionFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceFacade;
@@ -41,7 +40,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -51,8 +49,6 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public abstract class AbstractConnector implements Connector {
-    private final Map<PropertyKey, List<AllowableValue>> cachedAllowableValues = new ConcurrentHashMap<>();
-
     private volatile ConnectorInitializationContext initializationContext;
     private volatile ComponentLog logger;
 
@@ -184,14 +180,14 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public List<ValidationResult> validate(final FlowContext context) {
+    public List<ValidationResult> validate(final FlowContext context, final ConnectorValidationContext validationContext) {
         final List<ValidationResult> validationResults = new ArrayList<>();
-        validate(context, context.getRootGroup(), validationResults);
+        validate(context, context.getRootGroup(), validationContext, validationResults);
         return validationResults;
     }
 
-    private void validate(final FlowContext context, final ProcessGroupFacade group, final List<ValidationResult> validationResults) {
-        final List<ValidationResult> connectorPropertiesResults = validate(context, context.getConfigurationContext());
+    private void validate(final FlowContext context, final ProcessGroupFacade group, final ConnectorValidationContext validationContext, final List<ValidationResult> validationResults) {
+        final List<ValidationResult> connectorPropertiesResults = validate(context, context.getConfigurationContext(), validationContext);
         if (!connectorPropertiesResults.isEmpty()) {
             connectorPropertiesResults.stream()
                 .filter(result -> !result.isValid())
@@ -240,7 +236,7 @@ public abstract class AbstractConnector implements Connector {
         }
 
         for (final ProcessGroupFacade childGroup : group.getProcessGroups()) {
-            validate(context, childGroup, validationResults);
+            validate(context, childGroup, validationContext, validationResults);
         }
     }
 
@@ -356,8 +352,7 @@ public abstract class AbstractConnector implements Connector {
     }
 
 
-    @Override
-    public List<ValidationResult> validate(final FlowContext workingContext, final ConnectorConfigurationContext context) {
+    private List<ValidationResult> validate(final FlowContext workingContext, final ConnectorConfigurationContext context, final ConnectorValidationContext validationContext) {
         final List<ValidationResult> results = new ArrayList<>();
         final List<ConfigurationStep> configurationSteps = getConfigurationSteps(workingContext);
 
@@ -394,55 +389,9 @@ public abstract class AbstractConnector implements Connector {
                         continue;
                     }
 
-                    final ValidationResult result = descriptor.validate(propertyValue.getValue());
+                    final ValidationResult result = descriptor.validate(configurationStep.getName(), propertyGroup.getName(), propertyValue.getValue(), validationContext);
                     if (!result.isValid()) {
                         results.add(result);
-                    }
-
-                    final List<DescribedValue> allowableValues = descriptor.getAllowableValues();
-                    if (!isValueAllowed(propertyValue.getValue(), allowableValues)) {
-                        final ValidationResult invalidResult = new ValidationResult.Builder()
-                            .valid(false)
-                            .input(propertyValue.getValue())
-                            .subject(descriptor.getName())
-                            .explanation("Value is not one of the allowable values")
-                            .build();
-
-                        results.add(invalidResult);
-                    }
-
-                    final boolean allowableValuesFetchable = descriptor.isAllowableValuesFetchable();
-                    if (allowableValuesFetchable) {
-                        final PropertyKey key = new PropertyKey(configurationStep.getName(), propertyGroup.getName(), descriptor.getName());
-                        List<AllowableValue> fetchedAllowableValues = cachedAllowableValues.get(key);
-                        if (fetchedAllowableValues == null) {
-                            try {
-                                fetchedAllowableValues = fetchAllowableValues(configurationStep.getName(), propertyGroup.getName(), descriptor.getName(), workingContext);
-                            } catch (final Exception e) {
-                                getLogger().error("Failed to validate property {} due to failure fetching allowable values", descriptor.getName(), e);
-
-                                final ValidationResult invalidResult = new ValidationResult.Builder()
-                                    .valid(false)
-                                    .input(propertyValue.getValue())
-                                    .subject(descriptor.getName())
-                                    .explanation("Failed to fetch allowable values: " + e.getMessage())
-                                    .build();
-
-                                results.add(invalidResult);
-                                continue;
-                            }
-                        }
-
-                        if (!isValueAllowed(propertyValue.getValue(), fetchedAllowableValues)) {
-                            final ValidationResult invalidResult = new ValidationResult.Builder()
-                                .valid(false)
-                                .input(propertyValue.getValue())
-                                .subject(descriptor.getName())
-                                .explanation("Value is not one of the allowable values")
-                                .build();
-
-                            results.add(invalidResult);
-                        }
                     }
                 }
             }
@@ -462,24 +411,6 @@ public abstract class AbstractConnector implements Connector {
         }
 
         return results;
-    }
-
-    private boolean isValueAllowed(final String value, final List<? extends DescribedValue> allowableValues) {
-        if (allowableValues == null || allowableValues.isEmpty()) {
-            // If no allowable values are explicitly specified, consider all values to be allowable
-            return true;
-        }
-        if (value == null) {
-            return false;
-        }
-
-        for (final DescribedValue describedValue : allowableValues) {
-            if (value.equalsIgnoreCase(describedValue.getValue())) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private boolean isDependencySatisfied(final ConnectorPropertyDescriptor propertyDescriptor, final Function<String, ConnectorPropertyDescriptor> propertyDescriptorLookup,
@@ -540,7 +471,6 @@ public abstract class AbstractConnector implements Connector {
     @Override
     public final void onConfigurationStepConfigured(final String stepName, final FlowContext workingContext) throws FlowUpdateException {
         onStepConfigured(stepName, workingContext);
-        cachedAllowableValues.clear();
     }
 
     @Override
@@ -548,14 +478,7 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public final List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName, final FlowContext flowContext) {
-        final List<AllowableValue> allowableValues = fetchAllAllowableValues(stepName, groupName, propertyName, flowContext);
-        final PropertyKey key = new PropertyKey(stepName, groupName, propertyName);
-        cachedAllowableValues.put(key, allowableValues);
-        return allowableValues;
-    }
-
-    protected List<AllowableValue> fetchAllAllowableValues(final String stepName, final String groupName, final String propertyName, final FlowContext flowContext) {
+    public List<AllowableValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName, final FlowContext flowContext) {
         throw new UnsupportedOperationException("Property %s of Property Group %s in Configuration Step %s does not support fetching Allowable Values.".formatted(propertyName, groupName, stepName));
     }
 
@@ -582,6 +505,4 @@ public abstract class AbstractConnector implements Connector {
         return Collections.emptyList();
     }
 
-    protected record PropertyKey(String stepName, String groupName, String propertyName) {
-    }
 }

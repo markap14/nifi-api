@@ -17,14 +17,22 @@
 
 package org.apache.nifi.components.connector;
 
+import org.apache.nifi.components.DescribedValue;
+import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestConnectorPropertyDescriptor {
+
+    private static final String TEST_STEP_NAME = "test-step";
+    private static final String TEST_GROUP_NAME = "test-group";
 
     @Test
     void testValidateStringType() {
@@ -33,9 +41,10 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.STRING)
             .build();
 
-        assertTrue(descriptor.validate("any string value").isValid());
-        assertTrue(descriptor.validate("!@#$%^&*()_+-=[]{}|;:',.<>?/~`").isValid());
-        assertTrue(descriptor.validate("").isValid());
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "any string value", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "!@#$%^&*()_+-=[]{}|;:',.<>?/~`", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "", context).isValid());
     }
 
     @Test
@@ -45,8 +54,9 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.PASSWORD)
             .build();
 
-        assertTrue(descriptor.validate("secretPassword123!").isValid());
-        assertTrue(descriptor.validate("").isValid());
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "secretPassword123!", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "", context).isValid());
     }
 
     @Test
@@ -56,8 +66,9 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.STRING_LIST)
             .build();
 
-        assertTrue(descriptor.validate("item1,item2,item3").isValid());
-        assertTrue(descriptor.validate("").isValid());
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "item1,item2,item3", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "", context).isValid());
     }
 
     @Test
@@ -67,12 +78,13 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.BOOLEAN)
             .build();
 
-        assertTrue(descriptor.validate("true").isValid());
-        assertTrue(descriptor.validate("false").isValid());
-        assertTrue(descriptor.validate("TRUE").isValid());
-        assertTrue(descriptor.validate("FALSE").isValid());
-        assertTrue(descriptor.validate("TrUe").isValid());
-        assertTrue(descriptor.validate("FaLsE").isValid());
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "true", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "false", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "TRUE", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "FALSE", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "TrUe", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "FaLsE", context).isValid());
     }
 
     @Test
@@ -82,17 +94,18 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.BOOLEAN)
             .build();
 
-        ValidationResult result = descriptor.validate("invalid");
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        ValidationResult result = descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "invalid", context);
         assertFalse(result.isValid());
         assertEquals("Boolean Property", result.getSubject());
         assertEquals("invalid", result.getInput());
         assertEquals("Value must be true or false", result.getExplanation());
 
-        assertFalse(descriptor.validate("1").isValid());
-        assertFalse(descriptor.validate("0").isValid());
-        assertFalse(descriptor.validate("yes").isValid());
-        assertFalse(descriptor.validate("no").isValid());
-        assertFalse(descriptor.validate("").isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "1", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "0", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "yes", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "no", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "", context).isValid());
     }
 
     @Test
@@ -102,10 +115,11 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.INTEGER)
             .build();
 
-        assertTrue(descriptor.validate("12345").isValid());
-        assertTrue(descriptor.validate("-12345").isValid());
-        assertTrue(descriptor.validate("0").isValid());
-        assertTrue(descriptor.validate("00123").isValid());
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "12345", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "-12345", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "0", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "00123", context).isValid());
     }
 
     @Test
@@ -115,17 +129,18 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.INTEGER)
             .build();
 
-        ValidationResult result = descriptor.validate("123.45");
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        ValidationResult result = descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123.45", context);
         assertFalse(result.isValid());
         assertEquals("Integer Property", result.getSubject());
         assertEquals("123.45", result.getInput());
         assertEquals("Value must be an integer", result.getExplanation());
 
-        assertFalse(descriptor.validate("not a number").isValid());
-        assertFalse(descriptor.validate(" 123 ").isValid());
-        assertFalse(descriptor.validate("+123").isValid());
-        assertFalse(descriptor.validate("0x1A3F").isValid());
-        assertFalse(descriptor.validate("").isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "not a number", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, " 123 ", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "+123", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "0x1A3F", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "", context).isValid());
     }
 
     @Test
@@ -135,11 +150,12 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.DOUBLE)
             .build();
 
-        assertTrue(descriptor.validate("123").isValid());
-        assertTrue(descriptor.validate("123.456").isValid());
-        assertTrue(descriptor.validate("-123.456").isValid());
-        assertTrue(descriptor.validate("0.0").isValid());
-        assertTrue(descriptor.validate("0").isValid());
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123.456", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "-123.456", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "0.0", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "0", context).isValid());
     }
 
     @Test
@@ -149,16 +165,17 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.DOUBLE)
             .build();
 
-        ValidationResult result = descriptor.validate("not a number");
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        ValidationResult result = descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "not a number", context);
         assertFalse(result.isValid());
         assertEquals("Double Property", result.getSubject());
         assertEquals("not a number", result.getInput());
         assertEquals("Value must be a floating point number", result.getExplanation());
 
-        assertFalse(descriptor.validate("123.456.789").isValid());
-        assertFalse(descriptor.validate("1.23e10").isValid());
-        assertFalse(descriptor.validate("123.").isValid());
-        assertFalse(descriptor.validate(".123").isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123.456.789", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "1.23e10", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123.", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, ".123", context).isValid());
     }
 
     @Test
@@ -168,10 +185,11 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.FLOAT)
             .build();
 
-        assertTrue(descriptor.validate("123").isValid());
-        assertTrue(descriptor.validate("123.456").isValid());
-        assertTrue(descriptor.validate("-123.456").isValid());
-        assertTrue(descriptor.validate("0").isValid());
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123.456", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "-123.456", context).isValid());
+        assertTrue(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "0", context).isValid());
     }
 
     @Test
@@ -181,14 +199,32 @@ public class TestConnectorPropertyDescriptor {
             .type(PropertyType.FLOAT)
             .build();
 
-        ValidationResult result = descriptor.validate("not a number");
+        final ConnectorValidationContext context = new TestConnectorValidationContext();
+        ValidationResult result = descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "not a number", context);
         assertFalse(result.isValid());
         assertEquals("Float Property", result.getSubject());
         assertEquals("not a number", result.getInput());
         assertEquals("Value must be a floating point number", result.getExplanation());
 
-        assertFalse(descriptor.validate("123.").isValid());
-        assertFalse(descriptor.validate(".123").isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, "123.", context).isValid());
+        assertFalse(descriptor.validate(TEST_STEP_NAME, TEST_GROUP_NAME, ".123", context).isValid());
+    }
+
+    /**
+     * Simple test implementation of ConnectorValidationContext for unit testing.
+     */
+    private static class TestConnectorValidationContext implements ConnectorValidationContext {
+        @Override
+        public ValidationContext createValidationContext(final String stepName, final String groupName) {
+            // Return null as it's not needed for basic type validation tests
+            return null;
+        }
+
+        @Override
+        public List<DescribedValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName) {
+            // Return empty list as we don't need to fetch dynamic allowable values in these tests
+            return Collections.emptyList();
+        }
     }
 }
 

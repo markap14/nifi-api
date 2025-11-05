@@ -18,6 +18,7 @@
 package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.ConfigVerificationResult;
+import org.apache.nifi.components.DescribedValue;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
@@ -57,10 +58,13 @@ public class TestAbstractConnector {
     private ConnectorPropertyValue mockPropertyValue;
 
     private TestableAbstractConnector connector;
+    private ConnectorValidationContext validationContext;
+
 
     @BeforeEach
     void setUp() {
         connector = new TestableAbstractConnector();
+        validationContext = new TestConnectorValidationContext();
         when(flowContext.getConfigurationContext()).thenReturn(configurationContext);
         final ProcessGroupFacade rootGroupFacade = mock(ProcessGroupFacade.class);
         when(rootGroupFacade.getProcessors()).thenReturn(Collections.emptySet());
@@ -74,7 +78,7 @@ public class TestAbstractConnector {
     void testValidateWithEmptyConfigurationSteps() {
         connector.setConfigurationSteps(Collections.emptyList());
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertTrue(results.isEmpty());
         assertTrue(connector.isCustomValidateCalled());
@@ -101,7 +105,7 @@ public class TestAbstractConnector {
         connector.setConfigurationSteps(List.of(configStep));
         when(configurationContext.getProperty("Test Step", "Required Property")).thenReturn(null);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertEquals(1, results.size());
         final ValidationResult result = results.getFirst();
@@ -133,7 +137,7 @@ public class TestAbstractConnector {
         connector.setConfigurationSteps(List.of(configStep));
         when(configurationContext.getProperty("Test Step", "Optional Property")).thenReturn(null);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertTrue(results.isEmpty());
         assertTrue(connector.isCustomValidateCalled());
@@ -162,7 +166,7 @@ public class TestAbstractConnector {
         when(mockPropertyValue.getValue()).thenReturn("");
         when(configurationContext.getProperty("Test Step", "Validated Property")).thenReturn(mockPropertyValue);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertEquals(1, results.size());
         final ValidationResult result = results.getFirst();
@@ -195,7 +199,7 @@ public class TestAbstractConnector {
         when(mockPropertyValue.isSet()).thenReturn(true);
         when(configurationContext.getProperty("Test Step", "Valid Property")).thenReturn(mockPropertyValue);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertTrue(results.isEmpty());
         assertTrue(connector.isCustomValidateCalled());
@@ -231,7 +235,7 @@ public class TestAbstractConnector {
         when(mockPropertyValue.getValue()).thenReturn("Wrong Value");
         when(configurationContext.getProperty("Test Step", "Dependency Property")).thenReturn(mockPropertyValue);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertTrue(results.isEmpty());
         assertTrue(connector.isCustomValidateCalled());
@@ -269,7 +273,7 @@ public class TestAbstractConnector {
         when(configurationContext.getProperty("Test Step", "Dependency Property")).thenReturn(dependencyValue);
         when(configurationContext.getProperty("Test Step", "Dependent Property")).thenReturn(null);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertEquals(1, results.size());
         final ValidationResult result = results.getFirst();
@@ -323,7 +327,7 @@ public class TestAbstractConnector {
         when(configurationContext.getProperty("Step One", "Property One")).thenReturn(validValue);
         when(configurationContext.getProperty("Step Two", "Property Two")).thenReturn(invalidValue);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertEquals(1, results.size());
         final ValidationResult result = results.getFirst();
@@ -343,7 +347,7 @@ public class TestAbstractConnector {
                 .build()
         ));
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertEquals(1, results.size());
         final ValidationResult result = results.getFirst();
@@ -358,7 +362,7 @@ public class TestAbstractConnector {
         connector.setConfigurationSteps(Collections.emptyList());
         connector.setCustomValidationResults(null);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertTrue(results.isEmpty());
         assertTrue(connector.isCustomValidateCalled());
@@ -375,7 +379,7 @@ public class TestAbstractConnector {
                 .build()
         ));
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertTrue(results.isEmpty());
         assertTrue(connector.isCustomValidateCalled());
@@ -419,7 +423,7 @@ public class TestAbstractConnector {
         when(configurationContext.getProperty("Test Step", "Property One")).thenReturn(value1);
         when(configurationContext.getProperty("Test Step", "Property Two")).thenReturn(value2);
 
-        final List<ValidationResult> results = connector.validate(flowContext);
+        final List<ValidationResult> results = connector.validate(flowContext, validationContext);
 
         assertTrue(results.isEmpty());
         assertTrue(connector.isCustomValidateCalled());
@@ -490,5 +494,22 @@ public class TestAbstractConnector {
                 .build();
         }
     };
+
+    /**
+     * Simple test implementation of ConnectorValidationContext for unit testing.
+     */
+    private static class TestConnectorValidationContext implements ConnectorValidationContext {
+        @Override
+        public ValidationContext createValidationContext(final String stepName, final String groupName) {
+            // Return null as it's not needed for basic validation tests
+            return null;
+        }
+
+        @Override
+        public List<DescribedValue> fetchAllowableValues(final String stepName, final String groupName, final String propertyName) {
+            // Return empty list as we don't need to fetch dynamic allowable values in these tests
+            return Collections.emptyList();
+        }
+    }
 
 }

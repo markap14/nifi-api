@@ -76,10 +76,12 @@ public interface Connector {
      * is able to write to a remote system.
      *
      * @param activeFlowContext the active flow context
+     * @param validationContext the context for validation
+     *
      * @return a list of ValidationResults, each of which may indicate a check that was performed and any associated explanations
      * as to why the Connector is valid or invalid.
      */
-    List<ValidationResult> validate(FlowContext activeFlowContext);
+    List<ValidationResult> validate(FlowContext activeFlowContext, ConnectorValidationContext validationContext);
 
     /**
      * Returns the list of configuration steps that define the configuration of this Connector. Each step
@@ -128,8 +130,6 @@ public interface Connector {
     void finishUpdate(FlowContext workingFlowContext, FlowContext activeFlowContext) throws FlowUpdateException;
 
     List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues, FlowContext workingFlowContext);
-
-    List<ValidationResult> validate(FlowContext workingFlowContext, ConnectorConfigurationContext context);
 
     List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName, FlowContext flowContext);
 
