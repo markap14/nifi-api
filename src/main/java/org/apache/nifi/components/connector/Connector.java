@@ -21,6 +21,7 @@ import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.components.FlowContext;
+import org.apache.nifi.flow.VersionedExternalFlow;
 
 import java.util.List;
 import java.util.Map;
@@ -49,9 +50,17 @@ public interface Connector {
     /**
      * Initializes the Connector instance, providing it the necessary context that it needs to operate.
      * @param context the context for initialization
-     * @param activeFlowContext the flow context that represents the active flow
      */
-    void initialize(ConnectorInitializationContext context, FlowContext activeFlowContext);
+    void initialize(ConnectorInitializationContext context);
+
+    /**
+     * Provides the initial version of the flow that this Connector manages. The Active Flow Context will be
+     * updated to reflect this flow when the Connector is first added to the NiFi instance but not when the Connector
+     * is reinitialized upon restart of NiFi.
+     *
+     * @return the initial version of the flow
+     */
+    VersionedExternalFlow getInitialFlow();
 
     // FIXME: Consider adding two subclasses to FlowContext: ActiveFlowContext and WorkingFlowContext
     //       They would have no methods, but would serve as markers to make it more clear which context is being used

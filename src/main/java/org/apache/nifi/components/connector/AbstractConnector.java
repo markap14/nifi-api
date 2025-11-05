@@ -56,24 +56,17 @@ public abstract class AbstractConnector implements Connector {
 
 
     @Override
-    public final void initialize(final ConnectorInitializationContext context, final FlowContext activeFlowContext) {
+    public final void initialize(final ConnectorInitializationContext context) {
         this.initializationContext = context;
         this.logger = context.getLogger();
 
-        try {
-            init(activeFlowContext);
-        } catch (final FlowUpdateException e) {
-            throw new RuntimeException("Failed to initialize Connector", e);
-        }
+        init();
     }
 
     /**
      * No-op method for subclasses to override to perform any initialization logic
-     *
-     * @param activeFlowContext the flow context that represents the active flow
-     * @throws FlowUpdateException if there is an error during initialization
      */
-    protected void init(final FlowContext activeFlowContext) throws FlowUpdateException {
+    protected void init() {
     }
 
     protected final ComponentLog getLogger() {

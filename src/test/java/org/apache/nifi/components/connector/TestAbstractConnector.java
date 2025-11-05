@@ -24,6 +24,7 @@ import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
 import org.apache.nifi.components.connector.components.FlowContext;
 import org.apache.nifi.components.connector.components.ProcessGroupFacade;
+import org.apache.nifi.flow.VersionedExternalFlow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -444,6 +445,11 @@ public class TestAbstractConnector {
 
         public boolean isCustomValidateCalled() {
             return customValidateCalled;
+        }
+
+        @Override
+        public VersionedExternalFlow getInitialFlow() {
+            return null;
         }
 
         @Override
