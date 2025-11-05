@@ -23,7 +23,8 @@ public class VersionedConnector {
     private String instanceIdentifier;
     private String name;
     private ScheduledState scheduledState;
-    private List<VersionedConfigurationStep> configurationSteps;
+    private List<VersionedConfigurationStep> activeFlowConfiguration;
+    private List<VersionedConfigurationStep> workingFlowConfiguration;
     private String type;
     private Bundle bundle;
 
@@ -51,12 +52,20 @@ public class VersionedConnector {
         this.scheduledState = scheduledState;
     }
 
-    public List<VersionedConfigurationStep> getConfigurationSteps() {
-        return configurationSteps;
+    public List<VersionedConfigurationStep> getActiveFlowConfiguration() {
+        return activeFlowConfiguration;
     }
 
-    public void setConfigurationSteps(final List<VersionedConfigurationStep> configurationSteps) {
-        this.configurationSteps = configurationSteps;
+    public void setActiveFlowConfiguration(final List<VersionedConfigurationStep> configurationSteps) {
+        this.activeFlowConfiguration = configurationSteps;
+    }
+
+    public List<VersionedConfigurationStep> getWorkingFlowConfiguration() {
+        return workingFlowConfiguration;
+    }
+
+    public void setWorkingFlowConfiguration(final List<VersionedConfigurationStep> workingFlowConfiguration) {
+        this.workingFlowConfiguration = workingFlowConfiguration;
     }
 
     public String getType() {
