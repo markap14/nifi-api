@@ -472,7 +472,7 @@ public class TestAbstractConnector {
         }
 
         @Override
-        public void finishUpdate(final FlowContext workingFlowContext, final FlowContext activeFlowContext) {
+        public void applyUpdate(final FlowContext workingFlowContext, final FlowContext activeFlowContext) {
         }
 
         @Override

@@ -28,9 +28,11 @@ import org.apache.nifi.components.connector.components.ProcessGroupFacade;
 import org.apache.nifi.components.connector.components.ProcessGroupLifecycle;
 import org.apache.nifi.components.connector.components.ProcessorFacade;
 import org.apache.nifi.components.connector.components.ProcessorState;
+import org.apache.nifi.controller.queue.QueueSize;
 import org.apache.nifi.flow.VersionedConnection;
 import org.apache.nifi.logging.ComponentLog;
 
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -40,7 +42,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -51,6 +52,7 @@ import java.util.stream.Collectors;
 public abstract class AbstractConnector implements Connector {
     private volatile ConnectorInitializationContext initializationContext;
     private volatile ComponentLog logger;
+    private volatile CompletableFuture<Void> prepareUpdateFuture;
 
     protected abstract void onStepConfigured(final String stepName, final FlowContext workingContext) throws FlowUpdateException;
 
@@ -96,69 +98,163 @@ public abstract class AbstractConnector implements Connector {
 
     @Override
     public void stop(final FlowContext context) throws FlowUpdateException {
+        try {
+            stopAsync(context).get();
+        } catch (final Exception e) {
+            throw new FlowUpdateException("Failed to stop Connector", e);
+        }
+    }
+
+    private CompletableFuture<Void> stopAsync(final FlowContext context) {
         final ProcessGroupFacade rootGroup = context.getRootGroup();
         final ProcessGroupLifecycle lifecycle = rootGroup.getLifecycle();
-        try {
-            lifecycle.stopProcessors().get(1, TimeUnit.MINUTES);
-        } catch (final TimeoutException timeoutException) {
-            final List<ProcessorFacade> running = findProcessors(rootGroup, processor ->
-                processor.getLifecycle().getState() != ProcessorState.STOPPED && processor.getLifecycle().getState() != ProcessorState.DISABLED);
 
-            if (!running.isEmpty()) {
-                getLogger().warn("After waiting 60 seconds for all Processors to stop, {} are still running. Terminating now.", running.size());
-                running.forEach(processor -> processor.getLifecycle().terminate());
+        final CompletableFuture<Void> stopProcessorsFuture = lifecycle.stopProcessors()
+            .orTimeout(1, TimeUnit.MINUTES)
+            .exceptionally(throwable -> {
+                if (throwable instanceof TimeoutException || throwable.getCause() instanceof TimeoutException) {
+                    final List<ProcessorFacade> running = findProcessors(rootGroup, processor ->
+                        processor.getLifecycle().getState() != ProcessorState.STOPPED && processor.getLifecycle().getState() != ProcessorState.DISABLED);
+
+                    if (!running.isEmpty()) {
+                        getLogger().warn("After waiting 60 seconds for all Processors to stop, {} are still running. Terminating now.", running.size());
+                        running.forEach(processor -> processor.getLifecycle().terminate());
+                    }
+
+                    // Continue with the chain after handling timeout
+                    return null;
+                } else {
+                    throw new RuntimeException("Failed to stop all Processors", throwable);
+                }
+            });
+
+        return stopProcessorsFuture.thenRun(() -> {
+            try {
+                lifecycle.disableControllerServices(ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS).get();
+            } catch (final Exception e) {
+                throw new RuntimeException("Failed to complete disabling of all Controller Services", e);
             }
-        } catch (final Exception e) {
-            throw new FlowUpdateException("Failed to stop all Processors", e);
-        }
-
-        try {
-            lifecycle.disableControllerServices(ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS).get(1, TimeUnit.MINUTES);
-        } catch (final Exception e) {
-            throw new FlowUpdateException("Failed to disable Controller Services", e);
-        }
+        });
     }
 
     @Override
     public void prepareForUpdate(final FlowContext workingContext, final FlowContext activeContext) throws FlowUpdateException {
-        stop(activeContext);
+        final CompletableFuture<Void> future = stopAsync(activeContext);
+        prepareUpdateFuture = future;
+
+        try {
+            future.get();
+        } catch (final Exception e) {
+            throw new FlowUpdateException("Failed to prepare Connector for update", e);
+        }
     }
 
     /**
      * Drains all FlowFiles from the Connector instance.
      *
      * @param flowContext the FlowContext to use for drainage
-     * @throws FlowUpdateException if there is an error draining the FlowFiles
+     * @return a CompletableFuture that will be completed when drainage is complete
      */
-    protected void drainFlowFiles(final FlowContext flowContext) throws FlowUpdateException {
-        try {
-            stopSourceProcessors(flowContext);
-        } catch (final InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            throw new FlowUpdateException(ie);
+    protected CompletableFuture<Void> drainFlowFiles(final FlowContext flowContext) {
+        final CompletableFuture<Void> result = new CompletableFuture<>();
+        final QueueSize initialQueueSize = flowContext.getRootGroup().getQueueSize();
+        if (initialQueueSize.getObjectCount() == 0) {
+            getLogger().debug("No FlowFiles to drain from Connector");
+            result.complete(null);
+            return result;
         }
 
-        try {
-            startNonSourceProcessors(flowContext);
-        } catch (final InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            throw new FlowUpdateException(ie);
-        }
+        getLogger().info("Draining {} FlowFiles ({} bytes) from Connector",
+            initialQueueSize.getObjectCount(), NumberFormat.getNumberInstance().format(initialQueueSize.getByteCount()));
 
-        try {
-            ensureDrainageUnblocked();
-        } catch (final InvocationFailedException e) {
-            throw new FlowUpdateException(e);
-        }
+        final CompletableFuture<Void> stopProcessorsFuture = stopSourceProcessors(flowContext);
 
-        while (!isGroupDrained(flowContext.getRootGroup())) {
-            try {
-                Thread.sleep(1000);
-            } catch (final InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new FlowUpdateException(e);
+        final CompletableFuture<Void> startNonSourceFuture = stopProcessorsFuture.thenRun(() -> {
+            if (result.isDone()) {
+                return;
             }
-        }
+
+            final CompletableFuture<Void> enableServices = flowContext.getRootGroup().getLifecycle().enableControllerServices(
+                ControllerServiceReferenceScope.INCLUDE_REFERENCED_SERVICES_ONLY,
+                ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS);
+
+            try {
+                // Wait for all referenced services to be enabled.
+                enableServices.get();
+
+                if (!result.isDone()) {
+                    getLogger().info("Starting all non-source processors to facilitate drainage of FlowFiles");
+                    startNonSourceProcessors(flowContext).get();
+                }
+            } catch (final Exception e) {
+                try {
+                    flowContext.getRootGroup().getLifecycle().disableControllerServices(ControllerServiceReferenceHierarchy.INCLUDE_CHILD_GROUPS).get();
+                } catch (final Exception e1) {
+                    e.addSuppressed(e1);
+                }
+
+                result.completeExceptionally(new RuntimeException("Failed to start non-source processors while draining FlowFiles", e.getCause()));
+            }
+        });
+
+        startNonSourceFuture.thenRun(() -> {
+            try {
+                ensureDrainageUnblocked();
+            } catch (final Exception e) {
+                getLogger().warn("Failed to ensure drainage is unblocked when draining FlowFiles", e);
+            }
+
+            Exception failureReason = null;
+            int iterations = 0;
+            while (!isGroupDrained(flowContext.getRootGroup())) {
+                if (result.isDone()) {
+                    getLogger().info("Drainage has been cancelled; will no longer wait for FlowFiles to drain");
+                    break;
+                }
+
+                // Log the current queue size every 10 seconds (20 iterations of 500ms) so that it's clear
+                // whether or not progress is being made.
+                if (iterations++ % 20 == 0) {
+                    final QueueSize queueSize = flowContext.getRootGroup().getQueueSize();
+                    getLogger().info("Waiting for {} FlowFiles ({} bytes) to drain",
+                        queueSize.getObjectCount(), NumberFormat.getNumberInstance().format(queueSize.getByteCount()));
+                }
+
+                try {
+                    Thread.sleep(500);
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    failureReason = e;
+                    break;
+                }
+            }
+
+            // Log completion unless the result was completed exceptionally or cancelled.
+            if (!result.isDone()) {
+                getLogger().info("All {} FlowFiles have drained from Connector", initialQueueSize.getObjectCount());
+            }
+
+            try {
+                stop(flowContext);
+            } catch (final Exception e) {
+                getLogger().warn("Failed to stop source Processors after draining FlowFiles", e);
+                if (failureReason == null) {
+                    failureReason = e;
+                } else {
+                    failureReason.addSuppressed(e);
+                }
+            }
+
+            if (failureReason != null && !result.isDone()) {
+                result.completeExceptionally(new RuntimeException("Interrupted while waiting for " + AbstractConnector.this + " to drain", failureReason));
+            }
+
+            if (!result.isDone()) {
+                result.complete(null);
+            }
+        });
+
+        return result;
     }
 
     /**
@@ -237,57 +333,28 @@ public abstract class AbstractConnector implements Connector {
         return group.getQueueSize().getObjectCount() == 0;
     }
 
-    protected void stopSourceProcessors(final FlowContext context) throws InterruptedException, FlowUpdateException {
+    protected CompletableFuture<Void> stopSourceProcessors(final FlowContext context) {
         final List<ProcessorFacade> sourceProcessors = getSourceProcessors(context.getRootGroup());
 
         final List<CompletableFuture<Void>> stopFutures = new ArrayList<>();
         for (final ProcessorFacade sourceProcessor : sourceProcessors) {
-            final Future<Void> stopFuture = sourceProcessor.getLifecycle().stop();
-            stopFutures.add(toCompletableFuture(stopFuture));
+            final CompletableFuture<Void> stopFuture = sourceProcessor.getLifecycle().stop();
+            stopFutures.add(stopFuture);
         }
 
-        final CompletableFuture<Void> allStopped = CompletableFuture.allOf(stopFutures.toArray(new CompletableFuture[0]));
-        try {
-            allStopped.get();
-        } catch (final InterruptedException ie) {
-            throw ie;
-        } catch (final Exception e) {
-            throw new FlowUpdateException("Failed to stop all source Processors", e);
-        }
+        return CompletableFuture.allOf(stopFutures.toArray(new CompletableFuture[0]));
     }
 
-    protected void startNonSourceProcessors(final FlowContext flowContext) throws InterruptedException, FlowUpdateException {
+    protected CompletableFuture<Void> startNonSourceProcessors(final FlowContext flowContext) {
         final List<ProcessorFacade> nonSourceProcessors = getNonSourceProcessors(flowContext.getRootGroup());
 
         final List<CompletableFuture<Void>> startFutures = new ArrayList<>();
         for (final ProcessorFacade nonSourceProcessor : nonSourceProcessors) {
-            final Future<Void> startFuture = nonSourceProcessor.getLifecycle().start();
-            startFutures.add(toCompletableFuture(startFuture));
+            final CompletableFuture<Void> startFuture = nonSourceProcessor.getLifecycle().start();
+            startFutures.add(startFuture);
         }
 
-        final CompletableFuture<Void> allStarted = CompletableFuture.allOf(startFutures.toArray(new CompletableFuture[0]));
-        try {
-            allStarted.get();
-        } catch (final InterruptedException ie) {
-            throw ie;
-        } catch (final Exception e) {
-            throw new FlowUpdateException("Failed to start all non-source Processors", e);
-        }
-    }
-
-    private <T> CompletableFuture<T> toCompletableFuture(final Future<T> future) {
-        if (future instanceof CompletableFuture) {
-            return (CompletableFuture<T>) future;
-        }
-
-        // Wrap a non-CompletableFuture in a CompletableFuture
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return future.get();
-            } catch (final Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+        return CompletableFuture.allOf(startFutures.toArray(new CompletableFuture[0]));
     }
 
     protected List<ProcessorFacade> getSourceProcessors(final ProcessGroupFacade group) {
@@ -467,7 +534,10 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void abortUpdatePreparation(final FlowContext workingContext, final Throwable throwable) {
+    public void abortUpdate(final FlowContext workingContext, final Throwable throwable) {
+        if (prepareUpdateFuture != null && !prepareUpdateFuture.isDone()) {
+            prepareUpdateFuture.completeExceptionally(throwable);
+        }
     }
 
     @Override

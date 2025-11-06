@@ -121,22 +121,22 @@ public interface Connector {
     void prepareForUpdate(FlowContext workingFlowContext, FlowContext activeFlowContext) throws FlowUpdateException;
 
     /**
-     * Called if the update preparation (i.e., {@link #prepareForUpdate(FlowContext, FlowContext)}) fails. This allows the Connector to perform any necessary
-     * cleanup work after a failed preparation, such as restarting the flow if it was stopped, etc.
+     * Called if the update preparation (i.e., {@link #prepareForUpdate(FlowContext, FlowContext)}) fails or is cancelled.
+     * This allows the Connector to perform any necessary
+     * cleanup work after a failed preparation, such as cancelling any in-progress operations, etc.
      *
      * @param workingFlowContext the working flow context that was being used for the update preparation
      * @param cause the cause for the update preparation to be aborted
      */
-    void abortUpdatePreparation(FlowContext workingFlowContext, Throwable cause);
+    void abortUpdate(FlowContext workingFlowContext, Throwable cause);
 
     /**
-     * Called after all updates to the Connector's configuration have been applied. This allows the Connector to perform any necessary
-     * work after the configuration has been changed, such as starting the flow, etc.
+     * Applies any configured updates to the active flow.
      *
      * @param workingFlowContext the working flow context that represents the updated configuration
      * @param activeFlowContext the flow context that represents the active flow
      */
-    void finishUpdate(FlowContext workingFlowContext, FlowContext activeFlowContext) throws FlowUpdateException;
+    void applyUpdate(FlowContext workingFlowContext, FlowContext activeFlowContext) throws FlowUpdateException;
 
     List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues, FlowContext workingFlowContext);
 
