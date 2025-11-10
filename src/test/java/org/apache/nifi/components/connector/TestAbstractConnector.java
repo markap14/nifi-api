@@ -479,6 +479,11 @@ public class TestAbstractConnector {
         public List<ConfigVerificationResult> verifyConfigurationStep(final String stepName, final Map<String, String> propertyValues, final FlowContext workingFlowContext) {
             return Collections.emptyList();
         }
+
+        @Override
+        public List<ConfigVerificationResult> verify(final FlowContext flowContext) {
+            return List.of();
+        }
     }
 
     private static final Validator NON_EMPTY_VALIDATOR = new Validator() {

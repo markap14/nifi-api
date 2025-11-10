@@ -42,6 +42,21 @@ import java.util.Map;
  *     different Controller Service implementation).
  * </p>
  *
+ * <p>
+ *     When a flow definition is created and shared in NiFi, it can be easily instantiated in another NiFi instance.
+ *     The new instance can then be configured via Parameters. However, if more complex configuration is required, such as
+ *     choosing which Controller Service to use, or enabling or disabling a particular transformation step, the user must
+ *     understand how to manipulate the flow directly. Connectors provide the ability to encapsulate such complexity behind
+ *     a higher-level abstraction, allowing users to configure the flow via a guided configuration experience.
+ * </p>
+ *
+ * <p>
+ *     The Connector API makes use of a {@link FlowContext} abstraction in order to provide effectively two separate instances
+ *     of a flow: the Active flow that can be stopped and started in order to process and move data, and a Working flow that
+ *     can be used to verify configuration in order to ensure that when the configuration is applied to the Active flow, it will
+ *     function as desired.
+ * </p>
+ *
  * <b>Implementation Note:</b> This API is currently experimental, as it is under very active development. As such,
  * it is subject to change without notice between minor releases.
  */
@@ -93,6 +108,43 @@ public interface Connector {
     List<ValidationResult> validate(FlowContext activeFlowContext, ConnectorValidationContext validationContext);
 
     /**
+     * Validates the configuration for a specific configuration step. This allows the Connector to indicate any
+     * issues with syntactic configuration issues but is not as comprehensive as the overall validation provided
+     * by {@link #validate(FlowContext, ConnectorValidationContext)} due to the fact that it does not have access
+     * to the full configuration of the Connector. This provides immediate feedback to users
+     * as they are configuring each step.
+     *
+     * @param workingFlowContext the working flow context that is being used for the validation
+     * @param stepName the name of the configuration step being validated
+     * @param validationContext the context for validation
+     * @return a list of ValidationResults, each of which may indicate a check that was performed and any associated explanations
+     * as to why the configuration step is valid or invalid.
+     */
+    List<ValidationResult> validateConfigurationStep(FlowContext workingFlowContext, String stepName, ConnectorValidationContext validationContext);
+
+    /**
+     * Verifies the configuration for a specific configuration step. This allows the Connector to perform
+     * more comprehensive verification of the configuration for a step, such as attempting to connect to
+     * remote systems, sample data and ensure that it can be parsed correctly, etc.
+     *
+     * @param stepName the name of the configuration step being verified
+     * @param propertyValues the property values being used for the verification
+     * @param workingFlowContext the working flow context that is being used for the verification
+     * @return a list of ConfigVerificationResults, each of which may indicate a check that was performed and any associated explanation
+     * as to why the configuration step verification succeeded, failed, or was skipped.
+     */
+    List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues, FlowContext workingFlowContext);
+
+    /**
+     * Verifies the overall configuration of the Connector based on the configuration that has already been provided for the given Flow Context.
+     *
+     * @param flowContext the flow context that houses the configuration being used to drive the verification
+     * @return a list of ConfigVerificationResults, each of which may indicate a check that was performed and any associated explanation
+     * as to why the configuration verification succeeded, failed, or was skipped.
+     */
+    List<ConfigVerificationResult> verify(FlowContext flowContext);
+
+    /**
      * Returns the list of configuration steps that define the configuration of this Connector. Each step
      * represents a logical grouping of properties that should be configured together. The order of the steps
      * in the list represents the order in which the steps should be configured.
@@ -131,14 +183,14 @@ public interface Connector {
     void abortUpdate(FlowContext workingFlowContext, Throwable cause);
 
     /**
-     * Applies any configured updates to the active flow.
+     * Applies the configuration of the working FlowContext to the active flow. Once the active FlowContext has been updated,
+     * the existing working FlowContext is destroyed, along with any components that are part of the flow and any FlowFiles that
+     * might be queued up as part of the flow. A new working FlowContext is then created that reflects the newly updated active flow.
      *
      * @param workingFlowContext the working flow context that represents the updated configuration
      * @param activeFlowContext the flow context that represents the active flow
      */
     void applyUpdate(FlowContext workingFlowContext, FlowContext activeFlowContext) throws FlowUpdateException;
-
-    List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues, FlowContext workingFlowContext);
 
     List<AllowableValue> fetchAllowableValues(String stepName, String groupName, String propertyName, FlowContext flowContext);
 

@@ -411,50 +411,12 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
-
     private List<ValidationResult> validate(final FlowContext workingContext, final ConnectorConfigurationContext context, final ConnectorValidationContext validationContext) {
         final List<ValidationResult> results = new ArrayList<>();
         final List<ConfigurationStep> configurationSteps = getConfigurationSteps(workingContext);
 
         for (final ConfigurationStep configurationStep : configurationSteps) {
-            final List<ConnectorPropertyGroup> propertyGroups = configurationStep.getPropertyGroups();
-
-            for (final ConnectorPropertyGroup propertyGroup : propertyGroups) {
-                final List<ConnectorPropertyDescriptor> descriptors = propertyGroup.getProperties();
-                final Map<String, ConnectorPropertyDescriptor> descriptorMap = descriptors.stream()
-                    .collect(Collectors.toMap(ConnectorPropertyDescriptor::getName, Function.identity()));
-
-                final Function<String, ConnectorPropertyValue> propertyValueLookup = name -> context.getProperty(configurationStep.getName(), name);
-
-                for (final ConnectorPropertyDescriptor descriptor : descriptors) {
-                    final boolean dependencySatisfied = isDependencySatisfied(descriptor, descriptorMap::get, propertyValueLookup);
-
-                    // If the property descriptor's dependency is not satisfied, the property does not need to be considered, as it's not relevant to the
-                    if (!dependencySatisfied) {
-                        continue;
-                    }
-
-                    final ConnectorPropertyValue propertyValue = context.getProperty(configurationStep.getName(), descriptor.getName());
-                    if (propertyValue == null || !propertyValue.isSet()) {
-                        if (descriptor.isRequired()) {
-                            final ValidationResult invalidResult = new ValidationResult.Builder()
-                                .valid(false)
-                                .input(null)
-                                .subject(descriptor.getName())
-                                .explanation(descriptor.getName() + " is required")
-                                .build();
-                            results.add(invalidResult);
-                        }
-
-                        continue;
-                    }
-
-                    final ValidationResult result = descriptor.validate(configurationStep.getName(), propertyGroup.getName(), propertyValue.getValue(), validationContext);
-                    if (!result.isValid()) {
-                        results.add(result);
-                    }
-                }
-            }
+            results.addAll(validateConfigurationStep(configurationStep.getName(), context, validationContext, configurationStep));
         }
 
         // only run customValidate if regular validation is successful. This allows Processor developers to not have to check
@@ -466,6 +428,79 @@ public abstract class AbstractConnector implements Connector {
                     if (!result.isValid()) {
                         results.add(result);
                     }
+                }
+            }
+        }
+
+        return results;
+    }
+
+    @Override
+    public List<ValidationResult> validateConfigurationStep(final FlowContext workingFlowContext, final String stepName, final ConnectorValidationContext validationContext) {
+        final List<ValidationResult> results = new ArrayList<>();
+        final ConnectorConfigurationContext configurationContext = workingFlowContext.getConfigurationContext();
+        final List<ConfigurationStep> configurationSteps = getConfigurationSteps(workingFlowContext);
+
+        final ConfigurationStep configurationStep = configurationSteps.stream()
+            .filter(step -> step.getName().equals(stepName))
+            .findFirst()
+            .orElse(null);
+
+        if (configurationStep == null) {
+            final ValidationResult invalidResult = new ValidationResult.Builder()
+                .valid(false)
+                .input(stepName)
+                .subject("Configuration Step")
+                .explanation("Configuration Step with name " + stepName + " does not exist")
+                .build();
+
+            results.add(invalidResult);
+            return results;
+        }
+
+        results.addAll(validateConfigurationStep(stepName, configurationContext, validationContext, configurationStep));
+        return results;
+    }
+
+    private List<ValidationResult> validateConfigurationStep(final String stepName, final ConnectorConfigurationContext configurationContext, final ConnectorValidationContext validationContext,
+                final ConfigurationStep configurationStep) {
+
+        final List<ValidationResult> results = new ArrayList<>();
+
+        final List<ConnectorPropertyGroup> propertyGroups = configurationStep.getPropertyGroups();
+        for (final ConnectorPropertyGroup propertyGroup : propertyGroups) {
+            final List<ConnectorPropertyDescriptor> descriptors = propertyGroup.getProperties();
+            final Map<String, ConnectorPropertyDescriptor> descriptorMap = descriptors.stream()
+                .collect(Collectors.toMap(ConnectorPropertyDescriptor::getName, Function.identity()));
+
+            final Function<String, ConnectorPropertyValue> propertyValueLookup = name -> configurationContext.getProperty(stepName, name);
+
+            for (final ConnectorPropertyDescriptor descriptor : descriptors) {
+                final boolean dependencySatisfied = isDependencySatisfied(descriptor, descriptorMap::get, propertyValueLookup);
+
+                // If the property descriptor's dependency is not satisfied, the property does not need to be considered, as it's not relevant to the
+                if (!dependencySatisfied) {
+                    continue;
+                }
+
+                final ConnectorPropertyValue propertyValue = configurationContext.getProperty(stepName, descriptor.getName());
+                if (propertyValue == null || !propertyValue.isSet()) {
+                    if (descriptor.isRequired()) {
+                        final ValidationResult invalidResult = new ValidationResult.Builder()
+                            .valid(false)
+                            .input(null)
+                            .subject(descriptor.getName())
+                            .explanation(descriptor.getName() + " is required")
+                            .build();
+                        results.add(invalidResult);
+                    }
+
+                    continue;
+                }
+
+                final ValidationResult result = descriptor.validate(stepName, propertyGroup.getName(), propertyValue.getValue(), validationContext);
+                if (!result.isValid()) {
+                    results.add(result);
                 }
             }
         }
