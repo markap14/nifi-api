@@ -476,7 +476,7 @@ public class TestAbstractConnector {
         }
 
         @Override
-        public List<ConfigVerificationResult> verifyConfigurationStep(final String stepName, final Map<String, String> propertyValues, final FlowContext workingFlowContext) {
+        public List<ConfigVerificationResult> verifyConfigurationStep(final String stepName, final Map<String, String> propertyValueOverrides, final FlowContext flowContext) {
             return Collections.emptyList();
         }
 

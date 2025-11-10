@@ -18,6 +18,7 @@
 package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.AllowableValue;
+import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.connector.components.ConnectionFacade;
 import org.apache.nifi.components.connector.components.ControllerServiceFacade;
@@ -269,6 +270,19 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
+    public List<ConfigVerificationResult> verify(final FlowContext flowContext) {
+        final List<ConfigVerificationResult> results = new ArrayList<>();
+
+        final List<ConfigurationStep> configSteps = getConfigurationSteps(flowContext);
+        for (final ConfigurationStep configStep : configSteps) {
+            final List<ConfigVerificationResult> stepResults = verifyConfigurationStep(configStep.getName(), Map.of(), flowContext);
+            results.addAll(stepResults);
+        }
+
+        return results;
+    }
+
+    @Override
     public List<ValidationResult> validate(final FlowContext context, final ConnectorValidationContext validationContext) {
         final List<ValidationResult> validationResults = new ArrayList<>();
         validate(context, context.getRootGroup(), validationContext, validationResults);
@@ -416,7 +430,7 @@ public abstract class AbstractConnector implements Connector {
         final List<ConfigurationStep> configurationSteps = getConfigurationSteps(workingContext);
 
         for (final ConfigurationStep configurationStep : configurationSteps) {
-            results.addAll(validateConfigurationStep(configurationStep.getName(), context, validationContext, configurationStep));
+            results.addAll(validateConfigurationStep(configurationStep, context, validationContext));
         }
 
         // only run customValidate if regular validation is successful. This allows Processor developers to not have to check
@@ -436,35 +450,9 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public List<ValidationResult> validateConfigurationStep(final FlowContext workingFlowContext, final String stepName, final ConnectorValidationContext validationContext) {
-        final List<ValidationResult> results = new ArrayList<>();
-        final ConnectorConfigurationContext configurationContext = workingFlowContext.getConfigurationContext();
-        final List<ConfigurationStep> configurationSteps = getConfigurationSteps(workingFlowContext);
-
-        final ConfigurationStep configurationStep = configurationSteps.stream()
-            .filter(step -> step.getName().equals(stepName))
-            .findFirst()
-            .orElse(null);
-
-        if (configurationStep == null) {
-            final ValidationResult invalidResult = new ValidationResult.Builder()
-                .valid(false)
-                .input(stepName)
-                .subject("Configuration Step")
-                .explanation("Configuration Step with name " + stepName + " does not exist")
-                .build();
-
-            results.add(invalidResult);
-            return results;
-        }
-
-        results.addAll(validateConfigurationStep(stepName, configurationContext, validationContext, configurationStep));
-        return results;
-    }
-
-    private List<ValidationResult> validateConfigurationStep(final String stepName, final ConnectorConfigurationContext configurationContext, final ConnectorValidationContext validationContext,
-                final ConfigurationStep configurationStep) {
-
+    public List<ValidationResult> validateConfigurationStep(final ConfigurationStep configurationStep, final ConnectorConfigurationContext configurationContext,
+        final ConnectorValidationContext validationContext) {
+        final String stepName = configurationStep.getName();
         final List<ValidationResult> results = new ArrayList<>();
 
         final List<ConnectorPropertyGroup> propertyGroups = configurationStep.getPropertyGroups();

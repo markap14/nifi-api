@@ -114,26 +114,27 @@ public interface Connector {
      * to the full configuration of the Connector. This provides immediate feedback to users
      * as they are configuring each step.
      *
-     * @param workingFlowContext the working flow context that is being used for the validation
-     * @param stepName the name of the configuration step being validated
+     * @param configurationStep the configuration step being validated
+     * @param configurationContext the context for the configuration
      * @param validationContext the context for validation
      * @return a list of ValidationResults, each of which may indicate a check that was performed and any associated explanations
      * as to why the configuration step is valid or invalid.
      */
-    List<ValidationResult> validateConfigurationStep(FlowContext workingFlowContext, String stepName, ConnectorValidationContext validationContext);
+    // TODO: Should look at making verifyConfigurationStep / validateConfigurationStep more consistent in arguments.
+    List<ValidationResult> validateConfigurationStep(ConfigurationStep configurationStep, ConnectorConfigurationContext configurationContext, ConnectorValidationContext validationContext);
 
     /**
      * Verifies the configuration for a specific configuration step. This allows the Connector to perform
-     * more comprehensive verification of the configuration for a step, such as attempting to connect to
+     * more comprehensive verification of the configuration for a step than does validation, such as attempting to connect to
      * remote systems, sample data and ensure that it can be parsed correctly, etc.
      *
      * @param stepName the name of the configuration step being verified
-     * @param propertyValues the property values being used for the verification
-     * @param workingFlowContext the working flow context that is being used for the verification
+     * @param propertyValueOverrides any overrides to the currently configured property values that should be used for verification
+     * @param flowContext the flow context that is being used for the verification
      * @return a list of ConfigVerificationResults, each of which may indicate a check that was performed and any associated explanation
      * as to why the configuration step verification succeeded, failed, or was skipped.
      */
-    List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValues, FlowContext workingFlowContext);
+    List<ConfigVerificationResult> verifyConfigurationStep(String stepName, Map<String, String> propertyValueOverrides, FlowContext flowContext);
 
     /**
      * Verifies the overall configuration of the Connector based on the configuration that has already been provided for the given Flow Context.
