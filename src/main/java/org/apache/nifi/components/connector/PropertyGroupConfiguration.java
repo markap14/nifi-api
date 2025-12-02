@@ -19,5 +19,33 @@ package org.apache.nifi.components.connector;
 
 import java.util.Map;
 
-public record PropertyGroupConfiguration(String groupName, Map<String, String> propertyValues) {
+public record PropertyGroupConfiguration(String groupName, Map<String, ConnectorValueReference> propertyValues) {
+
+    /**
+     * Retrieves the raw string value for the given property.
+     *
+     * @param propertyName the name of the property
+     * @return the String value of the property, or null if no value is set
+     */
+    public String getPropertyValue(final String propertyName) {
+        final ConnectorValueReference valueReference = propertyValues.get(propertyName);
+        return valueReference == null ? null : valueReference.value();
+    }
+
+    /**
+     * Creates a PropertyGroupConfiguration from raw String values. This is a convenience method that
+     * converts String values to ConnectorValueReference objects with STRING_LITERAL type.
+     *
+     * @param groupName the name of the property group
+     * @param stringPropertyValues the property values as simple Strings
+     * @return a new PropertyGroupConfiguration with the values wrapped as ConnectorValueReference
+     */
+    public static PropertyGroupConfiguration fromStringValues(final String groupName, final Map<String, String> stringPropertyValues) {
+        final Map<String, ConnectorValueReference> referenceValues = new java.util.HashMap<>();
+        for (final Map.Entry<String, String> entry : stringPropertyValues.entrySet()) {
+            final String value = entry.getValue();
+            referenceValues.put(entry.getKey(), new ConnectorValueReference(value, ConnectorValueType.STRING_LITERAL));
+        }
+        return new PropertyGroupConfiguration(groupName, referenceValues);
+    }
 }

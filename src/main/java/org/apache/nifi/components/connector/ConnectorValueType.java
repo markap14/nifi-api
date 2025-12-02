@@ -15,27 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.nifi.flow;
+package org.apache.nifi.components.connector;
 
-import java.util.Map;
+public enum ConnectorValueType {
+    /**
+     * The value is a string literal.
+     */
+    STRING_LITERAL,
 
-public class VersionedConnectorPropertyGroup {
-    private String name;
-    private Map<String, VersionedConnectorValueReference> properties;
+    /**
+     * The value identifies an Asset
+     */
+    ASSET_REFERENCE,
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(final String name) {
-        this.name = name;
-    }
-
-    public Map<String, VersionedConnectorValueReference> getProperties() {
-        return properties;
-    }
-
-    public void setProperties(final Map<String, VersionedConnectorValueReference> properties) {
-        this.properties = properties;
-    }
+    /**
+     * The value identifies a Secret.
+     */
+    SECRET_REFERENCE
 }

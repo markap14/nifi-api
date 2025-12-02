@@ -15,27 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.nifi.flow;
+package org.apache.nifi.components.connector;
 
-import java.util.Map;
+import java.util.Objects;
 
-public class VersionedConnectorPropertyGroup {
-    private String name;
-    private Map<String, VersionedConnectorValueReference> properties;
+public record ConnectorValueReference(String value, ConnectorValueType valueType) {
 
-    public String getName() {
-        return name;
-    }
+    public static final ConnectorValueReference EMPTY = new ConnectorValueReference(null, ConnectorValueType.STRING_LITERAL);
 
-    public void setName(final String name) {
-        this.name = name;
-    }
-
-    public Map<String, VersionedConnectorValueReference> getProperties() {
-        return properties;
-    }
-
-    public void setProperties(final Map<String, VersionedConnectorValueReference> properties) {
-        this.properties = properties;
+    public ConnectorValueReference(final String value, final ConnectorValueType valueType) {
+        this.value = value;
+        this.valueType = Objects.requireNonNull(valueType, "valueType cannot be null");
     }
 }
