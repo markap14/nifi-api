@@ -18,7 +18,6 @@
 package org.apache.nifi.components.connector;
 
 import org.apache.nifi.components.connector.components.FlowContext;
-import org.apache.nifi.flow.Bundle;
 import org.apache.nifi.flow.VersionedExternalFlow;
 import org.apache.nifi.logging.ComponentLog;
 
@@ -86,21 +85,5 @@ public interface ConnectorInitializationContext {
      * @param versionedExternalFlow the new representation of the flow
      */
     void updateFlow(FlowContext flowContext, VersionedExternalFlow versionedExternalFlow) throws FlowUpdateException;
-
-    /**
-     * The Bundle that the Connector was configured with. If this is not the current Bundle, it implies that the Connector
-     * has changed to a different Bundle than was used when the Connector was previously configured,
-     * and the flow may need to be updated to match the new version.
-     * @return the Bundle that the Connector was configured with
-     */
-    Bundle getConfiguredBundle();
-
-    /**
-     * The Bundle that describes the current version of the Connector. If this is different from the Bundle returned by
-     * {@link #getConfiguredBundle()}, it implies that the Connector has been migrated to a different version and its flow
-     * may need to be updated.
-     * @return the current Bundle of this Connector
-     */
-    Bundle getBundle();
 
 }

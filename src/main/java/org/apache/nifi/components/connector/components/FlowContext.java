@@ -18,6 +18,7 @@
 package org.apache.nifi.components.connector.components;
 
 import org.apache.nifi.components.connector.ConnectorConfigurationContext;
+import org.apache.nifi.flow.Bundle;
 
 public interface FlowContext {
 
@@ -29,4 +30,11 @@ public interface FlowContext {
 
     FlowContextType getType();
 
+    /**
+     * Returns the bundle that indicates the version/coordinates that were used to create the
+     * configuration represented by this FlowContext.
+     *
+     * @return the bundle
+     */
+    Bundle getBundle();
 }
