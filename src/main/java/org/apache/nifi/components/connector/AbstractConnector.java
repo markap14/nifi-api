@@ -275,7 +275,7 @@ public abstract class AbstractConnector implements Connector {
 
         final List<ConfigurationStep> configSteps = getConfigurationSteps(flowContext);
         for (final ConfigurationStep configStep : configSteps) {
-            final List<ConfigVerificationResult> stepResults = verifyConfigurationStep(configStep.getName(), Map.of(), flowContext);
+            final List<ConfigVerificationResult> stepResults = verifyConfigurationStep(configStep.getName(), List.of(), flowContext);
             results.addAll(stepResults);
         }
 
@@ -461,7 +461,7 @@ public abstract class AbstractConnector implements Connector {
             final Map<String, ConnectorPropertyDescriptor> descriptorMap = descriptors.stream()
                 .collect(Collectors.toMap(ConnectorPropertyDescriptor::getName, Function.identity()));
 
-            final Function<String, ConnectorPropertyValue> propertyValueLookup = name -> configurationContext.getProperty(stepName, name);
+            final Function<String, ConnectorPropertyValue> propertyValueLookup = name -> configurationContext.getProperty(stepName, propertyGroup.getName(), name);
 
             for (final ConnectorPropertyDescriptor descriptor : descriptors) {
                 final boolean dependencySatisfied = isDependencySatisfied(descriptor, descriptorMap::get, propertyValueLookup);
@@ -471,7 +471,7 @@ public abstract class AbstractConnector implements Connector {
                     continue;
                 }
 
-                final ConnectorPropertyValue propertyValue = configurationContext.getProperty(stepName, descriptor.getName());
+                final ConnectorPropertyValue propertyValue = configurationContext.getProperty(stepName, propertyGroup.getName(), descriptor.getName());
                 if (propertyValue == null || !propertyValue.isSet()) {
                     if (descriptor.isRequired()) {
                         final ValidationResult invalidResult = new ValidationResult.Builder()
