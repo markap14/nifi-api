@@ -192,7 +192,7 @@ public final class ConnectorPropertyDescriptor {
 
     private ValidationResult validateType(final String value) {
         final String explanation = switch (type) {
-            case PASSWORD, STRING, STRING_LIST -> null;
+            case SECRET, STRING, STRING_LIST -> null;
             case BOOLEAN -> BOOLEAN_PATTERN.matcher(value).matches() ? null : "Value must be true or false";
             case INTEGER -> INTEGER_PATTERN.matcher(value).matches() ? null : "Value must be an integer";
             case DOUBLE, FLOAT -> DOUBLE_PATTERN.matcher(value).matches() ? null : "Value must be a floating point number";

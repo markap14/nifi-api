@@ -51,7 +51,7 @@ public class TestConnectorPropertyDescriptor {
     void testValidatePasswordType() {
         final ConnectorPropertyDescriptor descriptor = new ConnectorPropertyDescriptor.Builder()
             .name("Password Property")
-            .type(PropertyType.PASSWORD)
+            .type(PropertyType.SECRET)
             .build();
 
         final ConnectorValidationContext context = new TestConnectorValidationContext();
