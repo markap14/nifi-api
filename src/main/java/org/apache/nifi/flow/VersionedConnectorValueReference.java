@@ -25,14 +25,20 @@ import java.util.Objects;
  * that may reference different types of values (literals, assets, secrets).
  */
 public class VersionedConnectorValueReference {
-    private String value;
     private String valueType;
+    private String value;
+    private String assetId;
+    private String providerId;
+    private String secretName;
 
     public VersionedConnectorValueReference() {
     }
 
-    public VersionedConnectorValueReference(final String value, final String valueType) {
-        this.value = value;
+    public String getValueType() {
+        return valueType;
+    }
+
+    public void setValueType(final String valueType) {
         this.valueType = valueType;
     }
 
@@ -44,12 +50,28 @@ public class VersionedConnectorValueReference {
         this.value = value;
     }
 
-    public String getValueType() {
-        return valueType;
+    public String getAssetId() {
+        return assetId;
     }
 
-    public void setValueType(final String valueType) {
-        this.valueType = valueType;
+    public void setAssetId(final String assetId) {
+        this.assetId = assetId;
+    }
+
+    public String getProviderId() {
+        return providerId;
+    }
+
+    public void setProviderId(final String providerId) {
+        this.providerId = providerId;
+    }
+
+    public String getSecretName() {
+        return secretName;
+    }
+
+    public void setSecretName(final String secretName) {
+        this.secretName = secretName;
     }
 
     @Override
@@ -60,17 +82,21 @@ public class VersionedConnectorValueReference {
         if (!(obj instanceof VersionedConnectorValueReference other)) {
             return false;
         }
-        return Objects.equals(value, other.value) && Objects.equals(valueType, other.valueType);
+        return Objects.equals(valueType, other.valueType)
+               && Objects.equals(value, other.value)
+               && Objects.equals(assetId, other.assetId)
+               && Objects.equals(providerId, other.providerId)
+               && Objects.equals(secretName, other.secretName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, valueType);
+        return Objects.hash(valueType, value, assetId, providerId, secretName);
     }
 
     @Override
     public String toString() {
-        return "VersionedConnectorValueReference[valueType=" + valueType + ", value=" + value + "]";
+        return "VersionedConnectorValueReference[valueType=" + valueType + ", value=" + value
+               + ", assetId=" + assetId + ", providerId=" + providerId + ", secretName=" + secretName + "]";
     }
 }
-

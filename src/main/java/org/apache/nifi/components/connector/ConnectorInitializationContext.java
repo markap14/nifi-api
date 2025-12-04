@@ -72,7 +72,7 @@ public interface ConnectorInitializationContext {
      *
      * <p>
      *     Depending on the changes required in order to update the flow to the provided VersionedProcessGroup, this
-     *     could also result in stopping source processors and waiting for queues to drain.
+     *     could also result in stopping source processors and waiting for queues to drain, etc.
      * </p>
      *
      * <p>

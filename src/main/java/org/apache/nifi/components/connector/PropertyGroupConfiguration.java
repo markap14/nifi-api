@@ -22,14 +22,18 @@ import java.util.Map;
 public record PropertyGroupConfiguration(String groupName, Map<String, ConnectorValueReference> propertyValues) {
 
     /**
-     * Retrieves the raw string value for the given property.
+     * Retrieves the raw string value for the given property. This method only returns a value
+     * for StringLiteralValue references; for other reference types, it returns null.
      *
      * @param propertyName the name of the property
-     * @return the String value of the property, or null if no value is set
+     * @return the String value of the property, or null if no value is set or if the reference is not a StringLiteralValue
      */
     public String getPropertyValue(final String propertyName) {
         final ConnectorValueReference valueReference = propertyValues.get(propertyName);
-        return valueReference == null ? null : valueReference.value();
+        if (valueReference instanceof StringLiteralValue stringLiteral) {
+            return stringLiteral.getValue();
+        }
+        return null;
     }
 
     /**
@@ -44,7 +48,7 @@ public record PropertyGroupConfiguration(String groupName, Map<String, Connector
         final Map<String, ConnectorValueReference> referenceValues = new java.util.HashMap<>();
         for (final Map.Entry<String, String> entry : stringPropertyValues.entrySet()) {
             final String value = entry.getValue();
-            referenceValues.put(entry.getKey(), new ConnectorValueReference(value, ConnectorValueType.STRING_LITERAL));
+            referenceValues.put(entry.getKey(), new StringLiteralValue(value));
         }
         return new PropertyGroupConfiguration(groupName, referenceValues);
     }

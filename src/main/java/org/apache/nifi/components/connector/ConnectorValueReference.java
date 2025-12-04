@@ -17,14 +17,16 @@
 
 package org.apache.nifi.components.connector;
 
-import java.util.Objects;
+/**
+ * Represents a value reference for a connector property. A value can be a string literal,
+ * a reference to an asset, or a reference to a secret.
+ */
+public sealed interface ConnectorValueReference permits StringLiteralValue, AssetReference, SecretReference {
 
-public record ConnectorValueReference(String value, ConnectorValueType valueType) {
-
-    public static final ConnectorValueReference EMPTY = new ConnectorValueReference(null, ConnectorValueType.STRING_LITERAL);
-
-    public ConnectorValueReference(final String value, final ConnectorValueType valueType) {
-        this.value = value;
-        this.valueType = Objects.requireNonNull(valueType, "valueType cannot be null");
-    }
+    /**
+     * Returns the type of value reference.
+     *
+     * @return the value type
+     */
+    ConnectorValueType getValueType();
 }
