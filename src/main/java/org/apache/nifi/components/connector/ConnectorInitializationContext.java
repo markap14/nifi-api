@@ -52,12 +52,6 @@ public interface ConnectorInitializationContext {
     ComponentLog getLogger();
 
     /**
-     * Returns the SecretsManager that can be used for retrieving Secrets from an external secrets provider.
-     * @return the SecretsManager
-     */
-    SecretsManager getSecretsManager();
-
-    /**
      * <p>
      *   Updates the Connector's flow to the given VersionedExternalFlow. This may be a long-running process, as it involves
      *   several steps, to include:
